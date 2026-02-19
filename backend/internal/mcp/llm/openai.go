@@ -64,12 +64,22 @@ func (p *OpenAIProvider) ListModels(ctx context.Context) ([]string, error) {
 type openAIRequest struct {
 	Model    string          `json:"model"`
 	Messages []openAIMessage `json:"messages"`
+	Tools    []openAITool    `json:"tools,omitempty"`
 	Stream   bool            `json:"stream"`
 }
 
 type openAIMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+type openAITool struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Parameters  json.RawMessage `json:"parameters"`
+	} `json:"function"`
 }
 
 func (p *OpenAIProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
@@ -81,6 +91,16 @@ func (p *OpenAIProvider) GenerateStream(ctx context.Context, prompt string, tool
 			{Role: "user", Content: prompt},
 		},
 		Stream: true,
+	}
+
+	if len(tools) > 0 {
+		for _, t := range tools {
+			ot := openAITool{Type: "function"}
+			ot.Function.Name = t.Name
+			ot.Function.Description = t.Description
+			ot.Function.Parameters = t.Schema
+			reqBody.Tools = append(reqBody.Tools, ot)
+		}
 	}
 
 	data, err := json.Marshal(reqBody)
@@ -107,6 +127,10 @@ func (p *OpenAIProvider) GenerateStream(ctx context.Context, prompt string, tool
 		defer close(out)
 
 		scanner := bufio.NewScanner(resp.Body)
+		var toolCallID string
+		var toolName string
+		var toolArgs strings.Builder
+
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !strings.HasPrefix(line, "data: ") {
@@ -120,7 +144,14 @@ func (p *OpenAIProvider) GenerateStream(ctx context.Context, prompt string, tool
 			var streamResp struct {
 				Choices []struct {
 					Delta struct {
-						Content string `json:"content"`
+						Content   string `json:"content"`
+						ToolCalls []struct {
+							ID       string `json:"id"`
+							Function struct {
+								Name      string `json:"name"`
+								Arguments string `json:"arguments"`
+							} `json:"function"`
+						} `json:"tool_calls"`
 					} `json:"delta"`
 				} `json:"choices"`
 			}
@@ -129,12 +160,48 @@ func (p *OpenAIProvider) GenerateStream(ctx context.Context, prompt string, tool
 				continue
 			}
 
-			if len(streamResp.Choices) > 0 && streamResp.Choices[0].Delta.Content != "" {
+			if len(streamResp.Choices) == 0 {
+				continue
+			}
+
+			delta := streamResp.Choices[0].Delta
+
+			// Handle Text
+			if delta.Content != "" {
 				select {
 				case <-ctx.Done():
 					return
-				case out <- domain.Chunk{Text: streamResp.Choices[0].Delta.Content}:
+				case out <- domain.Chunk{Text: delta.Content}:
 				}
+			}
+
+			// Handle Tool Calls (Accumulate fragments)
+			if len(delta.ToolCalls) > 0 {
+				tc := delta.ToolCalls[0]
+				if tc.ID != "" {
+					toolCallID = tc.ID
+				}
+				if tc.Function.Name != "" {
+					toolName = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					toolArgs.WriteString(tc.Function.Arguments)
+				}
+			}
+		}
+
+		// Emit accumulated tool call at the end of the stream
+		if toolName != "" {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- domain.Chunk{
+				ToolCall: &domain.ToolCall{
+					ID:        toolCallID,
+					Name:      toolName,
+					Arguments: json.RawMessage(toolArgs.String()),
+				},
+			}:
 			}
 		}
 	}()

@@ -36,3 +36,7 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 func (c *Client) Del(ctx context.Context, key string) error {
 	return c.rdb.Del(ctx, key).Err()
 }
+
+func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
+	return c.rdb.Keys(ctx, pattern).Result()
+}

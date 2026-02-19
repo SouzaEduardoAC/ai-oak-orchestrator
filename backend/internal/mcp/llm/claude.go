@@ -28,7 +28,6 @@ func (p *ClaudeProvider) SetModel(name string) {
 }
 
 func (p *ClaudeProvider) ListModels(ctx context.Context) ([]string, error) {
-	// Anthropic does not have a public list models endpoint yet, so we return a curated list.
 	return []string{
 		"claude-3-5-sonnet-20240620",
 		"claude-3-opus-20240229",
@@ -41,12 +40,19 @@ type claudeRequest struct {
 	Model     string          `json:"model"`
 	Messages  []claudeMessage `json:"messages"`
 	MaxTokens int             `json:"max_tokens"`
+	Tools     []claudeTool    `json:"tools,omitempty"`
 	Stream    bool            `json:"stream"`
 }
 
 type claudeMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+type claudeTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"input_schema"`
 }
 
 func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
@@ -59,6 +65,16 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 		},
 		MaxTokens: 4096,
 		Stream:    true,
+	}
+
+	if len(tools) > 0 {
+		for _, t := range tools {
+			reqBody.Tools = append(reqBody.Tools, claudeTool{
+				Name:        t.Name,
+				Description: t.Description,
+				InputSchema: t.Schema,
+			})
+		}
 	}
 
 	data, err := json.Marshal(reqBody)
@@ -86,6 +102,10 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 		defer close(out)
 
 		scanner := bufio.NewScanner(resp.Body)
+		var toolCallID string
+		var toolName string
+		var toolArgs strings.Builder
+
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !strings.HasPrefix(line, "data: ") {
@@ -95,8 +115,17 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 
 			var event struct {
 				Type string `json:"type"`
+				// content_block_start
+				ContentBlock struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"content_block"`
+				// content_block_delta
 				Delta struct {
-					Text string `json:"text"`
+					Type         string `json:"type"`
+					Text         string `json:"text"`
+					PartialJSON  string `json:"partial_json"`
 				} `json:"delta"`
 			}
 
@@ -104,12 +133,36 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 				continue
 			}
 
-			if event.Type == "content_block_delta" && event.Delta.Text != "" {
-				select {
-				case <-ctx.Done():
-					return
-				case out <- domain.Chunk{Text: event.Delta.Text}:
+			switch event.Type {
+			case "content_block_start":
+				if event.ContentBlock.Type == "tool_use" {
+					toolCallID = event.ContentBlock.ID
+					toolName = event.ContentBlock.Name
 				}
+			case "content_block_delta":
+				if event.Delta.Type == "text_delta" {
+					select {
+					case <-ctx.Done():
+						return
+					case out <- domain.Chunk{Text: event.Delta.Text}:
+					}
+				} else if event.Delta.Type == "input_json_delta" {
+					toolArgs.WriteString(event.Delta.PartialJSON)
+				}
+			}
+		}
+
+		if toolName != "" {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- domain.Chunk{
+				ToolCall: &domain.ToolCall{
+					ID:        toolCallID,
+					Name:      toolName,
+					Arguments: json.RawMessage(toolArgs.String()),
+				},
+			}:
 			}
 		}
 	}()

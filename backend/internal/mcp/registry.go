@@ -26,7 +26,41 @@ func (r *Registry) SaveConfig(ctx context.Context, cfg domain.ToolConfig) error 
 }
 
 func (r *Registry) GetConfigs(ctx context.Context) ([]domain.ToolConfig, error) {
-	// TODO: Use Redis SCAN to find all keys matching mcp:config:*
-	// For now, this is a placeholder
-	return nil, nil
+
+	keys, err := r.redis.Keys(ctx, "mcp:config:*")
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+
+
+	var configs []domain.ToolConfig
+
+	for _, k := range keys {
+
+		val, err := r.redis.Get(ctx, k)
+
+		if err != nil {
+
+			continue
+
+		}
+
+		var cfg domain.ToolConfig
+
+		if err := json.Unmarshal([]byte(val), &cfg); err != nil {
+
+			continue
+
+		}
+
+		configs = append(configs, cfg)
+
+	}
+
+	return configs, nil
+
 }

@@ -9,10 +9,12 @@ import (
 	internalMiddleware "github.com/ecoza/ai-oak-orchestrator/internal/api/middleware"
 	"github.com/ecoza/ai-oak-orchestrator/internal/api/websocket"
 	"github.com/ecoza/ai-oak-orchestrator/internal/config"
+	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/docker"
 	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/redis"
 	"github.com/ecoza/ai-oak-orchestrator/internal/logger"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp/llm"
+	"github.com/ecoza/ai-oak-orchestrator/internal/services"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
@@ -40,7 +42,16 @@ func main() {
 		l.Fatal("Failed to connect to Redis", zap.Error(err))
 	}
 
+	dockerManager, err := docker.NewManager(cfg.Docker.Host)
+	if err != nil {
+		l.Fatal("Failed to initialize Docker manager", zap.Error(err))
+	}
+
 	registry := mcp.NewRegistry(rdb)
+
+	// Start Janitor
+	janitor := services.NewJanitorService(dockerManager, registry, l)
+	go janitor.Start(context.Background())
 
 	// 4. Initialize Agent & LLM
 	provider, err := llm.NewProvider(context.Background(), cfg.LLM)
@@ -59,10 +70,6 @@ func main() {
 
 	// 7. Register Handlers
 	mcpHandler := api.NewMCPHandler(registry)
-	// Protected API group
-	apiGroup := e.Group("/api")
-	apiGroup.Use(auth)
-	// TODO: refactor mcpHandler to use apiGroup
 	mcpHandler.RegisterRoutes(e)
 
 	llmHandler := api.NewLLMHandler(provider)
