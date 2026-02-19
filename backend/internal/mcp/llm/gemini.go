@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/google/generative-ai-go/genai"
@@ -25,7 +26,7 @@ func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) (*G
 	}, nil
 }
 
-func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan string, error) {
+func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
 	model := p.client.GenerativeModel(p.model)
 	
 	if len(tools) > 0 {
@@ -36,7 +37,6 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 			genaiTools.FunctionDeclarations[i] = &genai.FunctionDeclaration{
 				Name:        t.Name,
 				Description: t.Description,
-				// Placeholder for Parameters mapping
 				// Parameters: mapMcpSchemaToGenaiSchema(t.Schema),
 			}
 		}
@@ -44,7 +44,7 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 	}
 	
 	iter := model.GenerateContentStream(ctx, genai.Text(prompt))
-	out := make(chan string)
+	out := make(chan domain.Chunk)
 
 	go func() {
 		defer close(out)
@@ -54,18 +54,30 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 				break
 			}
 			if err != nil {
-				// TODO: Better error handling in stream
 				return
 			}
 
 			for _, cand := range resp.Candidates {
 				if cand.Content != nil {
 					for _, part := range cand.Content.Parts {
-						if text, ok := part.(genai.Text); ok {
+						switch v := part.(type) {
+						case genai.Text:
 							select {
 							case <-ctx.Done():
 								return
-							case out <- string(text):
+							case out <- domain.Chunk{Text: string(v)}:
+							}
+						case genai.FunctionCall:
+							args, _ := json.Marshal(v.Args)
+							select {
+							case <-ctx.Done():
+								return
+							case out <- domain.Chunk{
+								ToolCall: &domain.ToolCall{
+									Name:      v.Name,
+									Arguments: args,
+								},
+							}:
 							}
 						}
 					}

@@ -27,7 +27,8 @@ type DockerConfig struct {
 }
 
 type KeycloakConfig struct {
-	URL string `mapstructure:"url"`
+	URL     string `mapstructure:"url"`
+	JWKSURL string `mapstructure:"jwks_url"`
 }
 
 type RedisConfig struct {

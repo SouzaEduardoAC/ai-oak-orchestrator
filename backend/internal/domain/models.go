@@ -30,3 +30,40 @@ type ToolResult struct {
 	Content string `json:"content"`
 	IsError bool   `json:"isError"`
 }
+
+type Chunk struct {
+	Text     string    `json:"text,omitempty"`
+	ToolCall *ToolCall `json:"toolCall,omitempty"`
+}
+
+type AgentEventType string
+
+const (
+	EventToken           AgentEventType = "token"
+	EventApprovalRequest AgentEventType = "tool_approval_request"
+	EventError           AgentEventType = "error"
+)
+
+type AgentEvent struct {
+	Type    AgentEventType  `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type AgentCommandType string
+
+const (
+	CommandApprove AgentCommandType = "approve"
+	CommandReject  AgentCommandType = "reject"
+)
+
+type AgentCommand struct {
+	Type    AgentCommandType `json:"type"`
+	Payload json.RawMessage  `json:"payload"`
+}
+
+type ToolConfig struct {
+	Name   string            `json:"name"`
+	Image  string            `json:"image"`
+	Env    map[string]string `json:"env"`
+	Active bool              `json:"active"`
+}

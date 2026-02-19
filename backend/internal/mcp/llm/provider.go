@@ -7,5 +7,5 @@ import (
 )
 
 type Provider interface {
-	GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan string, error)
+	GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error)
 }

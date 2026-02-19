@@ -19,27 +19,29 @@ var upgrader = websocket.Upgrader{
 }
 
 type AgentRunner interface {
-	Run(ctx context.Context, session *domain.Session, output chan<- string) error
+	Run(ctx context.Context, session *domain.Session, output chan<- domain.AgentEvent, input <-chan domain.AgentCommand) error
 }
 
 type Hub struct {
-	clients    map[*websocket.Conn]bool
-	broadcast  chan []byte
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
-	agent      AgentRunner
-	logger     *zap.Logger
-	mu         sync.Mutex
+	clients         map[*websocket.Conn]bool
+	broadcast       chan []byte
+	register        chan *websocket.Conn
+	unregister      chan *websocket.Conn
+	pendingCommands map[*websocket.Conn]chan domain.AgentCommand
+	agent           AgentRunner
+	logger          *zap.Logger
+	mu              sync.Mutex
 }
 
 func NewHub(logger *zap.Logger, agent AgentRunner) *Hub {
 	return &Hub{
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan []byte),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
-		agent:      agent,
-		logger:     logger,
+		clients:         make(map[*websocket.Conn]bool),
+		broadcast:       make(chan []byte),
+		register:        make(chan *websocket.Conn),
+		unregister:      make(chan *websocket.Conn),
+		pendingCommands: make(map[*websocket.Conn]chan domain.AgentCommand),
+		agent:           agent,
+		logger:          logger,
 	}
 }
 
@@ -103,9 +105,18 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 			continue
 		}
 
-		if wsMsg.Type == "chat" {
-			// Start agent run
+		switch wsMsg.Type {
+		case "chat":
 			go h.runAgent(ws, wsMsg.Payload)
+		case string(domain.CommandApprove), string(domain.CommandReject):
+			h.mu.Lock()
+			if ch, ok := h.pendingCommands[ws]; ok {
+				ch <- domain.AgentCommand{
+					Type:    domain.AgentCommandType(wsMsg.Type),
+					Payload: wsMsg.Payload,
+				}
+			}
+			h.mu.Unlock()
 		}
 	}
 	
@@ -114,9 +125,20 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 
 func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage) {
 	ctx := context.Background()
-	output := make(chan string)
+	output := make(chan domain.AgentEvent)
+	input := make(chan domain.AgentCommand, 1)
+
+	h.mu.Lock()
+	h.pendingCommands[conn] = input
+	h.mu.Unlock()
+
+	defer func() {
+		h.mu.Lock()
+		delete(h.pendingCommands, conn)
+		h.mu.Unlock()
+		close(output)
+	}()
 	
-	// Create a dummy session for now
 	session := &domain.Session{
 		ID: "temp",
 		Messages: []domain.Message{
@@ -125,17 +147,13 @@ func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage) {
 	}
 
 	go func() {
-		for chunk := range output {
-			resp, _ := json.Marshal(map[string]interface{}{
-				"event": "agent:token",
-				"data":  chunk,
-			})
+		for event := range output {
+			resp, _ := json.Marshal(event)
 			conn.WriteMessage(websocket.TextMessage, resp)
 		}
 	}()
 
-	if err := h.agent.Run(ctx, session, output); err != nil {
+	if err := h.agent.Run(ctx, session, output, input); err != nil {
 		h.logger.Error("Agent run error", zap.Error(err))
 	}
-	close(output)
 }

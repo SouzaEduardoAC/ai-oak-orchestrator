@@ -13,8 +13,8 @@ func NewMockProvider() *MockProvider {
 	return &MockProvider{}
 }
 
-func (m *MockProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan string, error) {
-	out := make(chan string)
+func (m *MockProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
+	out := make(chan domain.Chunk)
 	go func() {
 		defer close(out)
 		words := []string{"Hello", " ", "world", " ", "from", " ", "mock", " ", "provider", "."}
@@ -22,7 +22,7 @@ func (m *MockProvider) GenerateStream(ctx context.Context, prompt string, tools 
 			select {
 			case <-ctx.Done():
 				return
-			case out <- w:
+			case out <- domain.Chunk{Text: w}:
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
