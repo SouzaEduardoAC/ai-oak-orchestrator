@@ -1,7 +1,7 @@
 services:
   orchestrator:
     build: 
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
