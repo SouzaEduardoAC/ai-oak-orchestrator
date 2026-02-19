@@ -32,19 +32,18 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 | GET | `/health` | Service health status | No |
 | GET | `/api/mcp/tools` | List configured MCP tools | Yes |
 | POST | `/api/mcp/tools` | Register a new MCP tool | Yes |
-| GET | `/api/llm/models` | List available models for active provider | Yes |
+| GET | `/api/models/available` | List available models for active provider | Yes |
 
 #### WebSocket API (`/ws`)
 **Incoming Messages:**
-- `{"type": "chat", "payload": "User message"}`
-- `{"type": "approve", "payload": {}}`
-- `{"type": "reject", "payload": {}}`
+- `{"type": "message", "payload": "User message"}`
+- `{"type": "approval", "payload": {"callId": "...", "approved": true}}`
 - `{"type": "set_model", "payload": "model-name"}`
 
 **Outgoing Events:**
-- `{"type": "token", "payload": "Partial word"}`
-- `{"type": "tool_approval_request", "payload": {...tool details...}}`
-- `{"type": "error", "payload": "Error message"}`
+- `{"type": "agent:response", "payload": "Partial word"}`
+- `{"type": "tool:approval_required", "payload": {...tool details...}}`
+- `{"type": "agent:error", "payload": "Error message"}`
 
 ## Environment Variables
 - `SERVER_PORT`: Default `8080`.
