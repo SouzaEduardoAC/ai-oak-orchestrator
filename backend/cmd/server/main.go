@@ -3,9 +3,11 @@ package main
 import (
 	"log"
 
+	"github.com/ecoza/ai-oak-orchestrator/internal/agent"
 	"github.com/ecoza/ai-oak-orchestrator/internal/api/websocket"
 	"github.com/ecoza/ai-oak-orchestrator/internal/config"
 	"github.com/ecoza/ai-oak-orchestrator/internal/logger"
+	"github.com/ecoza/ai-oak-orchestrator/internal/mcp/llm"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
@@ -27,13 +29,17 @@ func main() {
 
 	l.Info("Starting AI Oak Orchestrator", zap.String("port", cfg.Server.Port))
 
-	// 3. Initialize Echo
+	// 3. Initialize Agent & LLM
+	mockLLM := llm.NewMockProvider()
+	orch := agent.NewOrchestrator(mockLLM, l)
+
+	// 4. Initialize Echo
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	// 4. WebSocket Hub
-	hub := websocket.NewHub(l)
+	// 5. WebSocket Hub
+	hub := websocket.NewHub(l, orch)
 	go hub.Run()
 
 	e.GET("/ws", hub.HandleWebSocket)
