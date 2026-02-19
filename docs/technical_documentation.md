@@ -32,6 +32,8 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 | GET | `/health` | Service health status | No |
 | GET | `/api/mcp/tools` | List configured MCP tools | Yes |
 | POST | `/api/mcp/tools` | Register a new MCP tool | Yes |
+| DELETE | `/api/mcp/tools/:name` | Remove an MCP tool and stop its container | Yes |
+| GET | `/api/mcp/health` | Get aggregate health of tool ecosystem | Yes |
 | GET | `/api/models/available` | List available models for active provider | Yes |
 
 #### WebSocket API (`/ws`)
@@ -43,7 +45,12 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 **Outgoing Events:**
 - `{"type": "agent:response", "payload": "Partial word"}`
 - `{"type": "tool:approval_required", "payload": {...tool details...}}`
+- `{"type": "agent:log", "payload": "Tool progress or log"}`
 - `{"type": "agent:error", "payload": "Error message"}`
+
+## Infrastructure Details
+### Docker Container Naming
+All containers spawned by the orchestrator follow the deterministic naming pattern: `ai-oak-mcp-[toolname]`. This allows the server to adopt existing containers upon restart or shared tool usage.
 
 ## Environment Variables
 - `SERVER_PORT`: Default `8080`.
