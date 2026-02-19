@@ -19,7 +19,9 @@ type ServerConfig struct {
 }
 
 type LLMConfig struct {
-	APIKey string `mapstructure:"api_key"`
+	Provider string `mapstructure:"provider"`
+	APIKey   string `mapstructure:"api_key"`
+	Model    string `mapstructure:"model"`
 }
 
 type DockerConfig struct {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/agent"
@@ -42,8 +43,11 @@ func main() {
 	registry := mcp.NewRegistry(rdb)
 
 	// 4. Initialize Agent & LLM
-	mockLLM := llm.NewMockProvider()
-	orch := agent.NewOrchestrator(mockLLM, l)
+	provider, err := llm.NewProvider(context.Background(), cfg.LLM)
+	if err != nil {
+		l.Fatal("Failed to initialize LLM provider", zap.String("provider", cfg.LLM.Provider), zap.Error(err))
+	}
+	orch := agent.NewOrchestrator(provider, l)
 
 	// 5. Initialize Echo
 	e := echo.New()
