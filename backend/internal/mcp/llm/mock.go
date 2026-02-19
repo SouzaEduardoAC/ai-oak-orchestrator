@@ -7,10 +7,20 @@ import (
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 )
 
-type MockProvider struct{}
+type MockProvider struct{
+	model string
+}
 
 func NewMockProvider() *MockProvider {
-	return &MockProvider{}
+	return &MockProvider{model: "mock-default"}
+}
+
+func (m *MockProvider) SetModel(name string) {
+	m.model = name
+}
+
+func (m *MockProvider) ListModels(ctx context.Context) ([]string, error) {
+	return []string{"mock-model-1", "mock-model-2"}, nil
 }
 
 func (m *MockProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {

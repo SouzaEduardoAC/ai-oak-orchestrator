@@ -108,7 +108,7 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 		switch wsMsg.Type {
 		case "chat":
 			go h.runAgent(ws, wsMsg.Payload)
-		case string(domain.CommandApprove), string(domain.CommandReject):
+		case string(domain.CommandApprove), string(domain.CommandReject), string(domain.CommandSetModel):
 			h.mu.Lock()
 			if ch, ok := h.pendingCommands[ws]; ok {
 				ch <- domain.AgentCommand{

@@ -23,6 +23,20 @@ func NewClaudeProvider(apiKey, model string) *ClaudeProvider {
 	}
 }
 
+func (p *ClaudeProvider) SetModel(name string) {
+	p.model = name
+}
+
+func (p *ClaudeProvider) ListModels(ctx context.Context) ([]string, error) {
+	// Anthropic does not have a public list models endpoint yet, so we return a curated list.
+	return []string{
+		"claude-3-5-sonnet-20240620",
+		"claude-3-opus-20240229",
+		"claude-3-sonnet-20240229",
+		"claude-3-haiku-20240307",
+	}, nil
+}
+
 type claudeRequest struct {
 	Model     string          `json:"model"`
 	Messages  []claudeMessage `json:"messages"`

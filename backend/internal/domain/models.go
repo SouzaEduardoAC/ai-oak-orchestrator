@@ -52,8 +52,9 @@ type AgentEvent struct {
 type AgentCommandType string
 
 const (
-	CommandApprove AgentCommandType = "approve"
-	CommandReject  AgentCommandType = "reject"
+	CommandApprove  AgentCommandType = "approve"
+	CommandReject   AgentCommandType = "reject"
+	CommandSetModel AgentCommandType = "set_model"
 )
 
 type AgentCommand struct {

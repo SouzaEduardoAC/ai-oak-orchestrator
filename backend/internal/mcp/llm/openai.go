@@ -23,6 +23,44 @@ func NewOpenAIProvider(apiKey, model string) *OpenAIProvider {
 	}
 }
 
+func (p *OpenAIProvider) SetModel(name string) {
+	p.model = name
+}
+
+func (p *OpenAIProvider) ListModels(ctx context.Context) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.openai.com/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	var models []string
+	for _, m := range result.Data {
+		if strings.HasPrefix(m.ID, "gpt-") {
+			models = append(models, m.ID)
+		}
+	}
+	return models, nil
+}
+
 type openAIRequest struct {
 	Model    string          `json:"model"`
 	Messages []openAIMessage `json:"messages"`

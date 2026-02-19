@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp"
@@ -14,6 +15,7 @@ type Orchestrator struct {
 	llm        llm.Provider
 	mcpClients map[string]*mcp.Client
 	logger     *zap.Logger
+	mu         sync.RWMutex
 }
 
 func NewOrchestrator(llm llm.Provider, logger *zap.Logger) *Orchestrator {
@@ -32,6 +34,21 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 	o.logger.Info("Agent loop started", zap.String("session_id", session.ID))
 
 	for {
+		// 0. Check for pending commands (e.g. SetModel)
+		select {
+		case cmd := <-input:
+			if cmd.Type == domain.CommandSetModel {
+				var modelName string
+				if err := json.Unmarshal(cmd.Payload, &modelName); err == nil {
+					o.mu.Lock()
+					o.llm.SetModel(modelName)
+					o.mu.Unlock()
+					o.logger.Info("Model changed", zap.String("model", modelName))
+				}
+			}
+		default:
+		}
+
 		// 1. Get current tools from all clients
 		var allTools []domain.Tool
 		for _, client := range o.mcpClients {
@@ -48,7 +65,9 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		}
 
 		// 3. Generate stream
+		o.mu.RLock()
 		stream, err := o.llm.GenerateStream(ctx, prompt, allTools)
+		o.mu.RUnlock()
 		if err != nil {
 			return err
 		}
@@ -78,16 +97,33 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		approvalPayload, _ := json.Marshal(activeToolCall)
 		output <- domain.AgentEvent{Type: domain.EventApprovalRequest, Payload: approvalPayload}
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case cmd := <-input:
-			if cmd.Type == domain.CommandReject {
-				o.logger.Info("Tool rejected by user", zap.String("name", activeToolCall.Name))
-				session.Messages = append(session.Messages, domain.Message{Role: "user", Content: "Tool execution rejected by user."})
-				continue // Loop back to LLM with rejection message
+		var approved, rejected bool
+		for !approved && !rejected {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case cmd := <-input:
+				switch cmd.Type {
+				case domain.CommandApprove:
+					approved = true
+				case domain.CommandReject:
+					rejected = true
+					o.logger.Info("Tool rejected by user", zap.String("name", activeToolCall.Name))
+					session.Messages = append(session.Messages, domain.Message{Role: "user", Content: "Tool execution rejected by user."})
+				case domain.CommandSetModel:
+					var modelName string
+					if err := json.Unmarshal(cmd.Payload, &modelName); err == nil {
+						o.mu.Lock()
+						o.llm.SetModel(modelName)
+						o.mu.Unlock()
+						o.logger.Info("Model changed", zap.String("model", modelName))
+					}
+				}
 			}
-			// Fallthrough if approved
+		}
+
+		if rejected {
+			continue
 		}
 
 		// 6. Execute Tool

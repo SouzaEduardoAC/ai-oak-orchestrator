@@ -59,7 +59,14 @@ func main() {
 
 	// 7. Register Handlers
 	mcpHandler := api.NewMCPHandler(registry)
+	// Protected API group
+	apiGroup := e.Group("/api")
+	apiGroup.Use(auth)
+	// TODO: refactor mcpHandler to use apiGroup
 	mcpHandler.RegisterRoutes(e)
+
+	llmHandler := api.NewLLMHandler(provider)
+	llmHandler.RegisterRoutes(e)
 
 	hub := websocket.NewHub(l, orch)
 	go hub.Run()

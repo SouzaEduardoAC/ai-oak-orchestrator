@@ -92,3 +92,36 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 func (p *GeminiProvider) Close() error {
 	return p.client.Close()
 }
+
+func (p *GeminiProvider) SetModel(name string) {
+	p.model = name
+}
+
+func (p *GeminiProvider) ListModels(ctx context.Context) ([]string, error) {
+	iter := p.client.ListModels(ctx)
+	var models []string
+	for {
+		m, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		// Filter for models that support content generation
+		if m.SupportedGenerationMethods != nil {
+			for _, method := range m.SupportedGenerationMethods {
+				if method == "generateContent" {
+					// The name returned is usually "models/gemini-1.5-pro", we strip "models/"
+					name := m.Name
+					if len(name) > 7 && name[:7] == "models/" {
+						name = name[7:]
+					}
+					models = append(models, name)
+					break
+				}
+			}
+		}
+	}
+	return models, nil
+}
