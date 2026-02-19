@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
+	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/redis"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -29,11 +30,12 @@ type Hub struct {
 	unregister      chan *websocket.Conn
 	pendingCommands map[*websocket.Conn]chan domain.AgentCommand
 	agent           AgentRunner
+	redis           *redis.Client
 	logger          *zap.Logger
 	mu              sync.Mutex
 }
 
-func NewHub(logger *zap.Logger, agent AgentRunner) *Hub {
+func NewHub(logger *zap.Logger, agent AgentRunner, rdb *redis.Client) *Hub {
 	return &Hub{
 		clients:         make(map[*websocket.Conn]bool),
 		broadcast:       make(chan []byte),
@@ -41,6 +43,7 @@ func NewHub(logger *zap.Logger, agent AgentRunner) *Hub {
 		unregister:      make(chan *websocket.Conn),
 		pendingCommands: make(map[*websocket.Conn]chan domain.AgentCommand),
 		agent:           agent,
+		redis:           rdb,
 		logger:          logger,
 	}
 }
@@ -151,19 +154,30 @@ func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage) {
 	h.pendingCommands[conn] = input
 	h.mu.Unlock()
 
+	// 1. Get Session ID (from user claims or default)
+	sessionID := "default-session"
+	// TODO: Extract from JWT claims stored in Echo context (need to pass from HandleWebSocket)
+
+	// 2. Load History
+	session, err := h.redis.GetSession(ctx, sessionID)
+	if err != nil {
+		h.logger.Info("Starting new session", zap.String("id", sessionID))
+		session = &domain.Session{ID: sessionID}
+	}
+
+	session.Messages = append(session.Messages, domain.Message{Role: "user", Content: string(payload)})
+
 	defer func() {
 		h.mu.Lock()
 		delete(h.pendingCommands, conn)
 		h.mu.Unlock()
 		close(output)
+		
+		// 3. Save History
+		if err := h.redis.SaveSession(ctx, session); err != nil {
+			h.logger.Error("Failed to save session", zap.Error(err))
+		}
 	}()
-	
-	session := &domain.Session{
-		ID: "temp",
-		Messages: []domain.Message{
-			{Role: "user", Content: string(payload)},
-		},
-	}
 
 	go func() {
 		for event := range output {

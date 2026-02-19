@@ -80,7 +80,7 @@ func main() {
 	llmHandler := api.NewLLMHandler(provider)
 	llmHandler.RegisterRoutes(apiGroup.Group("/models"))
 
-	hub := websocket.NewHub(l, orch)
+	hub := websocket.NewHub(l, orch, rdb)
 	go hub.Run()
 
 	e.GET("/ws", hub.HandleWebSocket, auth)

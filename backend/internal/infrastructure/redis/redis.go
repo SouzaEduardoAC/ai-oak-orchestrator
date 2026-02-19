@@ -2,8 +2,10 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -39,4 +41,24 @@ func (c *Client) Del(ctx context.Context, key string) error {
 
 func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
 	return c.rdb.Keys(ctx, pattern).Result()
+}
+
+func (c *Client) SaveSession(ctx context.Context, session *domain.Session) error {
+	data, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+	return c.Set(ctx, "session:"+session.ID, data, 24*time.Hour)
+}
+
+func (c *Client) GetSession(ctx context.Context, id string) (*domain.Session, error) {
+	data, err := c.Get(ctx, "session:"+id)
+	if err != nil {
+		return nil, err
+	}
+	var session domain.Session
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		return nil, err
+	}
+	return &session, nil
 }

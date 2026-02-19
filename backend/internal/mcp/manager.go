@@ -63,16 +63,30 @@ func (tm *ToolManager) EnsureTool(ctx context.Context, name string) (*Client, er
 		return nil, fmt.Errorf("tool %s not found in registry", name)
 	}
 
-	// 2. Start/Get Container
-	// Simplified: assuming we create a new container or find existing by name logic (omitted for brevity)
-	// For MVP, we'll spawn a new one. In prod, we'd check if running.
-	containerID, err := tm.dockerManager.CreateContainer(ctx, *targetConfig, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create container: %w", err)
-	}
+	// 2. Start/Get Container (Singleton Logic)
+	containerName := fmt.Sprintf("ai-oak-mcp-%s", name)
+	var containerID string
 
-	if err := tm.dockerManager.StartContainer(ctx, containerID); err != nil {
-		return nil, fmt.Errorf("failed to start container: %w", err)
+	inspect, err := tm.dockerManager.InspectContainer(ctx, containerName)
+	if err == nil {
+		// Container exists
+		containerID = inspect.ID
+		if !inspect.State.Running {
+			if err := tm.dockerManager.StartContainer(ctx, containerID); err != nil {
+				return nil, fmt.Errorf("failed to start existing container: %w", err)
+			}
+		}
+	} else {
+		// Container does not exist, create it
+		// First pull if not present (simplified for MVP)
+		id, err := tm.dockerManager.CreateContainer(ctx, *targetConfig, nil, containerName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create container: %w", err)
+		}
+		containerID = id
+		if err := tm.dockerManager.StartContainer(ctx, containerID); err != nil {
+			return nil, fmt.Errorf("failed to start container: %w", err)
+		}
 	}
 
 	// 3. Attach and Initialize MCP

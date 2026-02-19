@@ -37,7 +37,7 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 			genaiTools.FunctionDeclarations[i] = &genai.FunctionDeclaration{
 				Name:        t.Name,
 				Description: t.Description,
-				// Parameters: mapMcpSchemaToGenaiSchema(t.Schema),
+				Parameters:  mapMcpSchemaToGenaiSchema(t.Schema),
 			}
 		}
 		model.Tools = []*genai.Tool{genaiTools}
@@ -124,4 +124,58 @@ func (p *GeminiProvider) ListModels(ctx context.Context) ([]string, error) {
 		}
 	}
 	return models, nil
+}
+
+func mapMcpSchemaToGenaiSchema(raw json.RawMessage) *genai.Schema {
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+
+	return convertMapToSchema(m)
+}
+
+func convertMapToSchema(m map[string]interface{}) *genai.Schema {
+	s := &genai.Schema{}
+
+	if t, ok := m["type"].(string); ok {
+		switch t {
+		case "string":
+			s.Type = genai.TypeString
+		case "number":
+			s.Type = genai.TypeNumber
+		case "integer":
+			s.Type = genai.TypeInteger
+		case "boolean":
+			s.Type = genai.TypeBoolean
+		case "object":
+			s.Type = genai.TypeObject
+			if props, ok := m["properties"].(map[string]interface{}); ok {
+				s.Properties = make(map[string]*genai.Schema)
+				for k, v := range props {
+					if subMap, ok := v.(map[string]interface{}); ok {
+						s.Properties[k] = convertMapToSchema(subMap)
+					}
+				}
+			}
+			if req, ok := m["required"].([]interface{}); ok {
+				for _, r := range req {
+					if rStr, ok := r.(string); ok {
+						s.Required = append(s.Required, rStr)
+					}
+				}
+			}
+		case "array":
+			s.Type = genai.TypeArray
+			if items, ok := m["items"].(map[string]interface{}); ok {
+				s.Items = convertMapToSchema(items)
+			}
+		}
+	}
+
+	if desc, ok := m["description"].(string); ok {
+		s.Description = desc
+	}
+
+	return s
 }

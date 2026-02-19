@@ -32,7 +32,11 @@ func (m *ContainerManager) ListManagedContainers(ctx context.Context) ([]types.C
 	})
 }
 
-func (m *ContainerManager) CreateContainer(ctx context.Context, img string, cmd []string) (string, error) {
+func (m *ContainerManager) InspectContainer(ctx context.Context, idOrName string) (types.ContainerJSON, error) {
+	return m.cli.ContainerInspect(ctx, idOrName)
+}
+
+func (m *ContainerManager) CreateContainer(ctx context.Context, img string, cmd []string, name string) (string, error) {
 	resp, err := m.cli.ContainerCreate(ctx, &container.Config{
 		Image:        img,
 		Cmd:          cmd,
@@ -44,7 +48,7 @@ func (m *ContainerManager) CreateContainer(ctx context.Context, img string, cmd 
 		Labels: map[string]string{
 			"com.ai-oak.mcp-tool": "true",
 		},
-	}, nil, nil, nil, "")
+	}, nil, nil, nil, name)
 	if err != nil {
 		return "", err
 	}
