@@ -18,6 +18,10 @@ func NewClient(t rpc.Transport) *Client {
 	}
 }
 
+func (c *Client) OnNotification(handler func(method string, params json.RawMessage)) {
+	c.rpc.OnNotification(handler)
+}
+
 type InitializeParams struct {
 	ProtocolVersion string                 `json:"protocolVersion"`
 	Capabilities    map[string]interface{} `json:"capabilities"`

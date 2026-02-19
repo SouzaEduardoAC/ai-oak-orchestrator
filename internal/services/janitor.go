@@ -4,18 +4,27 @@ import (
 	"context"
 	"time"
 
-	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/docker"
-	"github.com/ecoza/ai-oak-orchestrator/internal/mcp"
+	"github.com/docker/docker/api/types"
+	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"go.uber.org/zap"
 )
 
+type DockerManager interface {
+	ListManagedContainers(ctx context.Context) ([]types.Container, error)
+	RemoveContainer(ctx context.Context, id string) error
+}
+
+type ToolRegistry interface {
+	GetConfigs(ctx context.Context) ([]domain.ToolConfig, error)
+}
+
 type JanitorService struct {
-	dockerManager *docker.ContainerManager
-	registry      *mcp.Registry
+	dockerManager DockerManager
+	registry      ToolRegistry
 	logger        *zap.Logger
 }
 
-func NewJanitorService(dm *docker.ContainerManager, r *mcp.Registry, l *zap.Logger) *JanitorService {
+func NewJanitorService(dm DockerManager, r ToolRegistry, l *zap.Logger) *JanitorService {
 	return &JanitorService{
 		dockerManager: dm,
 		registry:      r,

@@ -42,6 +42,7 @@ const (
 	EventToken           AgentEventType = "agent:response"
 	EventApprovalRequest AgentEventType = "tool:approval_required"
 	EventError           AgentEventType = "agent:error"
+	EventLog             AgentEventType = "agent:log"
 )
 
 type AgentEvent struct {

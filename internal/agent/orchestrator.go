@@ -11,14 +11,18 @@ import (
 	"go.uber.org/zap"
 )
 
+type ToolProvider interface {
+	ListTools(ctx context.Context) []*mcp.Client
+}
+
 type Orchestrator struct {
 	llm         llm.Provider
-	toolManager *mcp.ToolManager
+	toolManager ToolProvider
 	logger      *zap.Logger
 	mu          sync.RWMutex
 }
 
-func NewOrchestrator(llm llm.Provider, tm *mcp.ToolManager, logger *zap.Logger) *Orchestrator {
+func NewOrchestrator(llm llm.Provider, tm ToolProvider, logger *zap.Logger) *Orchestrator {
 	return &Orchestrator{
 		llm:         llm,
 		toolManager: tm,
@@ -124,7 +128,7 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 
 		// 6. Execute Tool
 		o.logger.Info("Executing tool", zap.String("name", activeToolCall.Name))
-		result, err := o.executeTool(ctx, activeToolCall)
+		result, err := o.executeTool(ctx, activeToolCall, output)
 		if err != nil {
 			result = &domain.ToolResult{IsError: true, Content: err.Error()}
 		}
@@ -138,13 +142,20 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 	return nil
 }
 
-func (o *Orchestrator) executeTool(ctx context.Context, call *domain.ToolCall) (*domain.ToolResult, error) {
+func (o *Orchestrator) executeTool(ctx context.Context, call *domain.ToolCall, output chan<- domain.AgentEvent) (*domain.ToolResult, error) {
 	// For now, iterate all clients until we find the tool
-	// Real implementation would have a registry mapping tool names to clients
 	for _, client := range o.toolManager.ListTools(ctx) {
 		tools, _ := client.ListTools(ctx)
 		for _, t := range tools {
 			if t.Name == call.Name {
+				// Register temporary notification handler
+				client.OnNotification(func(method string, params json.RawMessage) {
+					o.logger.Info("Tool notification", zap.String("method", method))
+					output <- domain.AgentEvent{
+						Type:    domain.EventLog,
+						Payload: params,
+					}
+				})
 				return client.CallTool(ctx, call.Name, call.Arguments)
 			}
 		}

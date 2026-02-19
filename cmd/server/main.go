@@ -74,7 +74,7 @@ func main() {
 	apiGroup := e.Group("/api")
 	apiGroup.Use(auth)
 
-	mcpHandler := api.NewMCPHandler(registry)
+	mcpHandler := api.NewMCPHandler(registry, toolManager)
 	mcpHandler.RegisterRoutes(apiGroup.Group("/mcp"))
 
 	llmHandler := api.NewLLMHandler(provider)

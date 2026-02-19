@@ -127,6 +127,25 @@ func (tm *ToolManager) InitializeAll(ctx context.Context) error {
 	return nil
 }
 
+func (tm *ToolManager) StopTool(ctx context.Context, name string) error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	containerID, ok := tm.activeContainers[name]
+	if !ok {
+		return nil // Already stopped or never started
+	}
+
+	delete(tm.activeTools, name)
+	delete(tm.activeContainers, name)
+
+	if err := tm.dockerManager.StopContainer(ctx, containerID); err != nil {
+		return fmt.Errorf("failed to stop container: %w", err)
+	}
+
+	return tm.dockerManager.RemoveContainer(ctx, containerID)
+}
+
 func (tm *ToolManager) ListTools(ctx context.Context) []*Client {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
