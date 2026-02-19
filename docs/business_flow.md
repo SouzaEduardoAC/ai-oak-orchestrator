@@ -5,7 +5,13 @@
 - **Action:** Redirected to Keycloak for OIDC login.
 - **Outcome:** UI receives a JWT, which is sent in the `Authorization: Bearer` header for all backend requests.
 
-## 2. MCP Tool Management
+## 2. Dynamic Model Selection
+- **Discovery:** UI calls `GET /api/llm/models` to retrieve available models allowed by the API Key.
+- **Selection:** User selects a model from the dropdown.
+- **Switching:** UI sends a `set_model` command via WebSocket.
+- **Outcome:** The backend updates the active model for the provider session thread-safely.
+
+## 3. MCP Tool Management
 - **Step:** Administrator adds a new MCP Tool.
 - **Action:** REST POST to `/api/mcp/tools` with Docker image and configuration.
 - **Outcome:** Backend persists config to Redis and optionally pulls the Docker image.

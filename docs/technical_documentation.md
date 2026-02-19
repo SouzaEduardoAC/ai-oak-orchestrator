@@ -14,9 +14,10 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 
 ### 3. Agent Orchestrator (`internal/agent`)
 - The `Run` method executes the core logic.
+- **Thread Safety:** Uses a `sync.RWMutex` to allow safe switching of LLM models mid-session.
 - **Event Bus:** Communicates with the API layer via two channels:
     - `output chan AgentEvent`: For outgoing tokens, logs, and approval requests.
-    - `input chan AgentCommand`: For incoming user decisions (approve/reject).
+    - `input chan AgentCommand`: For incoming user decisions (approve/reject) and commands (set_model).
 
 ### 4. Docker Integration (`internal/infrastructure/docker`)
 - Uses the official Docker Engine API.
@@ -31,12 +32,14 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 | GET | `/health` | Service health status | No |
 | GET | `/api/mcp/tools` | List configured MCP tools | Yes |
 | POST | `/api/mcp/tools` | Register a new MCP tool | Yes |
+| GET | `/api/llm/models` | List available models for active provider | Yes |
 
 #### WebSocket API (`/ws`)
 **Incoming Messages:**
 - `{"type": "chat", "payload": "User message"}`
 - `{"type": "approve", "payload": {}}`
 - `{"type": "reject", "payload": {}}`
+- `{"type": "set_model", "payload": "model-name"}`
 
 **Outgoing Events:**
 - `{"type": "token", "payload": "Partial word"}`

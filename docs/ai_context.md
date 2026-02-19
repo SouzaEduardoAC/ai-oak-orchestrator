@@ -23,6 +23,7 @@ AI Oak Orchestrator is a high-performance Golang backend designed to bridge Larg
 - **Typing:** Strict domain models in `internal/domain` must be respected to maintain parity with the frontend.
 
 ## Guidelines for AI Modifications
-- When adding new LLM providers, implement the `LLMProvider` interface in `internal/mcp/llm`.
+- When adding new LLM providers, implement the `Provider` interface in `internal/mcp/llm`, including `ListModels` and `SetModel`.
 - New MCP features should be added to the `Client` in `internal/mcp/client.go`.
 - Always ensure JSON-RPC request/response consistency.
+- Use the `Orchestrator.mu` mutex when accessing shared provider state in the agent loop.

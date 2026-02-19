@@ -7,6 +7,7 @@ A high-performance orchestration engine for LLMs and Model Context Protocol (MCP
 - **MCP Native:** Host implementation of the Model Context Protocol.
 - **Docker Integration:** Seamlessly executes tools inside isolated containers.
 - **Real-time:** Bidirectional WebSocket communication for streaming and user-in-the-loop approvals.
+- **Dynamic Model Selection:** Automatically discovers available models for your API key and allows switching on-the-fly.
 - **Secure:** Integrated with Keycloak for modern identity management.
 
 ## Getting Started
