@@ -17,6 +17,7 @@ type Client struct {
 	pending   map[string]chan *Response
 	mu        sync.Mutex
 	nextID    int
+	onNotify  func(method string, params json.RawMessage)
 }
 
 func NewClient(t Transport) *Client {
@@ -28,7 +29,14 @@ func NewClient(t Transport) *Client {
 	return c
 }
 
+func (c *Client) OnNotification(handler func(method string, params json.RawMessage)) {
+	c.mu.Lock()
+	c.onNotify = handler
+	c.mu.Unlock()
+}
+
 func (c *Client) handleIncoming(raw json.RawMessage) {
+	// 1. Try Response
 	var resp Response
 	if err := json.Unmarshal(raw, &resp); err == nil && resp.ID != nil {
 		idStr := string(*resp.ID)
@@ -41,7 +49,18 @@ func (c *Client) handleIncoming(raw json.RawMessage) {
 		c.mu.Unlock()
 		return
 	}
-	// TODO: Handle Notifications (Method without ID)
+
+	// 2. Try Notification
+	var notif Notification
+	if err := json.Unmarshal(raw, &notif); err == nil && notif.Method != "" {
+		c.mu.Lock()
+		handler := c.onNotify
+		c.mu.Unlock()
+		if handler != nil {
+			handler(notif.Method, notif.Params)
+		}
+		return
+	}
 }
 
 func (c *Client) Call(ctx context.Context, method string, params interface{}, result interface{}) error {

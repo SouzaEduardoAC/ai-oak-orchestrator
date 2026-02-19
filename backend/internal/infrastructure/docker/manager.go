@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 )
@@ -22,6 +23,15 @@ func NewManager(host string) (*ContainerManager, error) {
 	return &ContainerManager{cli: cli}, nil
 }
 
+func (m *ContainerManager) ListManagedContainers(ctx context.Context) ([]types.Container, error) {
+	args := filters.NewArgs()
+	args.Add("label", "com.ai-oak.mcp-tool=true")
+	return m.cli.ContainerList(ctx, container.ListOptions{
+		Filters: args,
+		All:     true,
+	})
+}
+
 func (m *ContainerManager) CreateContainer(ctx context.Context, img string, cmd []string) (string, error) {
 	resp, err := m.cli.ContainerCreate(ctx, &container.Config{
 		Image:        img,
@@ -31,6 +41,9 @@ func (m *ContainerManager) CreateContainer(ctx context.Context, img string, cmd 
 		AttachStderr: true,
 		OpenStdin:    true,
 		Tty:          false,
+		Labels: map[string]string{
+			"com.ai-oak.mcp-tool": "true",
+		},
 	}, nil, nil, nil, "")
 	if err != nil {
 		return "", err

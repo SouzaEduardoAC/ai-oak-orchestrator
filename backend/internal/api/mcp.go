@@ -16,8 +16,7 @@ func NewMCPHandler(r *mcp.Registry) *MCPHandler {
 	return &MCPHandler{registry: r}
 }
 
-func (h *MCPHandler) RegisterRoutes(e *echo.Echo) {
-	g := e.Group("/api/mcp")
+func (h *MCPHandler) RegisterRoutes(g *echo.Group) {
 	g.GET("/tools", h.ListTools)
 	g.POST("/tools", h.AddTool)
 }
