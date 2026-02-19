@@ -39,9 +39,9 @@ type Chunk struct {
 type AgentEventType string
 
 const (
-	EventToken           AgentEventType = "token"
-	EventApprovalRequest AgentEventType = "tool_approval_request"
-	EventError           AgentEventType = "error"
+	EventToken           AgentEventType = "agent:response"
+	EventApprovalRequest AgentEventType = "tool:approval_required"
+	EventError           AgentEventType = "agent:error"
 )
 
 type AgentEvent struct {

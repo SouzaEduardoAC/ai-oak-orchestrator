@@ -106,9 +106,28 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 		}
 
 		switch wsMsg.Type {
-		case "chat":
+		case "message":
 			go h.runAgent(ws, wsMsg.Payload)
-		case string(domain.CommandApprove), string(domain.CommandReject), string(domain.CommandSetModel):
+		case "approval":
+			var approval struct {
+				CallID   string `json:"callId"`
+				Approved bool   `json:"approved"`
+			}
+			if err := json.Unmarshal(wsMsg.Payload, &approval); err == nil {
+				cmdType := domain.CommandReject
+				if approval.Approved {
+					cmdType = domain.CommandApprove
+				}
+				h.mu.Lock()
+				if ch, ok := h.pendingCommands[ws]; ok {
+					ch <- domain.AgentCommand{
+						Type:    cmdType,
+						Payload: wsMsg.Payload, // We can pass the raw payload or nil
+					}
+				}
+				h.mu.Unlock()
+			}
+		case string(domain.CommandSetModel):
 			h.mu.Lock()
 			if ch, ok := h.pendingCommands[ws]; ok {
 				ch <- domain.AgentCommand{

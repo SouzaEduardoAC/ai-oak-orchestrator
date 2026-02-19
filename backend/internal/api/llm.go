@@ -17,7 +17,7 @@ func NewLLMHandler(p llm.Provider) *LLMHandler {
 }
 
 func (h *LLMHandler) RegisterRoutes(g *echo.Group) {
-	g.GET("/models", h.ListModels)
+	g.GET("/available", h.ListModels)
 }
 
 func (h *LLMHandler) ListModels(c echo.Context) error {

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/docker"

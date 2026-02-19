@@ -12,22 +12,18 @@ import (
 )
 
 type Orchestrator struct {
-	llm        llm.Provider
-	mcpClients map[string]*mcp.Client
-	logger     *zap.Logger
-	mu         sync.RWMutex
+	llm         llm.Provider
+	toolManager *mcp.ToolManager
+	logger      *zap.Logger
+	mu          sync.RWMutex
 }
 
-func NewOrchestrator(llm llm.Provider, logger *zap.Logger) *Orchestrator {
+func NewOrchestrator(llm llm.Provider, tm *mcp.ToolManager, logger *zap.Logger) *Orchestrator {
 	return &Orchestrator{
-		llm:        llm,
-		mcpClients: make(map[string]*mcp.Client),
-		logger:     logger,
+		llm:         llm,
+		toolManager: tm,
+		logger:      logger,
 	}
-}
-
-func (o *Orchestrator) RegisterMCPClient(name string, client *mcp.Client) {
-	o.mcpClients[name] = client
 }
 
 func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output chan<- domain.AgentEvent, input <-chan domain.AgentCommand) error {
@@ -51,7 +47,7 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 
 		// 1. Get current tools from all clients
 		var allTools []domain.Tool
-		for _, client := range o.mcpClients {
+		for _, client := range o.toolManager.ListTools(ctx) {
 			tools, err := client.ListTools(ctx)
 			if err == nil {
 				allTools = append(allTools, tools...)
@@ -145,7 +141,7 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 func (o *Orchestrator) executeTool(ctx context.Context, call *domain.ToolCall) (*domain.ToolResult, error) {
 	// For now, iterate all clients until we find the tool
 	// Real implementation would have a registry mapping tool names to clients
-	for _, client := range o.mcpClients {
+	for _, client := range o.toolManager.ListTools(ctx) {
 		tools, _ := client.ListTools(ctx)
 		for _, t := range tools {
 			if t.Name == call.Name {

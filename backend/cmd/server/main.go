@@ -48,6 +48,8 @@ func main() {
 	}
 
 	registry := mcp.NewRegistry(rdb)
+	toolManager := mcp.NewToolManager(dockerManager, registry, l)
+	go toolManager.InitializeAll(context.Background())
 
 	// Start Janitor
 	janitor := services.NewJanitorService(dockerManager, registry, l)
@@ -58,7 +60,7 @@ func main() {
 	if err != nil {
 		l.Fatal("Failed to initialize LLM provider", zap.String("provider", cfg.LLM.Provider), zap.Error(err))
 	}
-	orch := agent.NewOrchestrator(provider, l)
+	orch := agent.NewOrchestrator(provider, toolManager, l)
 
 	// 5. Initialize Echo
 	e := echo.New()
@@ -76,7 +78,7 @@ func main() {
 	mcpHandler.RegisterRoutes(apiGroup.Group("/mcp"))
 
 	llmHandler := api.NewLLMHandler(provider)
-	llmHandler.RegisterRoutes(apiGroup.Group("/llm"))
+	llmHandler.RegisterRoutes(apiGroup.Group("/models"))
 
 	hub := websocket.NewHub(l, orch)
 	go hub.Run()
