@@ -11,13 +11,17 @@ import (
 )
 
 type mockLLM struct {
-	responses []domain.Chunk
+	responses [][]domain.Chunk
+	current   int
 }
 
 func (m *mockLLM) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
-	ch := make(chan domain.Chunk, len(m.responses))
-	for _, r := range m.responses {
-		ch <- r
+	ch := make(chan domain.Chunk, 10)
+	if m.current < len(m.responses) {
+		for _, r := range m.responses[m.current] {
+			ch <- r
+		}
+		m.current++
 	}
 	close(ch)
 	return ch, nil
@@ -31,16 +35,18 @@ func (m *mockLLM) SetModel(name string) {}
 
 type mockToolProvider struct{}
 
-func (m *mockToolProvider) ListTools(ctx context.Context) []*mcp.Client {
+func (m *mockToolProvider) ListTools(ctx context.Context) map[string]*mcp.Client {
 	return nil
 }
 
 func TestOrchestratorRun_SimpleText(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	llm := &mockLLM{
-		responses: []domain.Chunk{
-			{Text: "Hello"},
-			{Text: " world"},
+		responses: [][]domain.Chunk{
+			{
+				{Text: "Hello"},
+				{Text: " world"},
+			},
 		},
 	}
 	tp := &mockToolProvider{}
@@ -78,9 +84,9 @@ func TestOrchestratorRun_ToolApproval(t *testing.T) {
 	// 1. LLM emits a ToolCall
 	// 2. LLM then emits a final answer (in the second iteration)
 	llm := &mockLLM{
-		responses: []domain.Chunk{
-			{ToolCall: &domain.ToolCall{ID: "call_1", Name: "test_tool"}},
-			{Text: "Final result"},
+		responses: [][]domain.Chunk{
+			{{ToolCall: &domain.ToolCall{ID: "call_1", Name: "test_tool"}}},
+			{{Text: "Final result"}},
 		},
 	}
 	tp := &mockToolProvider{}

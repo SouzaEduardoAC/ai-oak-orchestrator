@@ -97,11 +97,11 @@ func (h *MCPHandler) GetHealth(c echo.Context) error {
 	healthyCount := 0
 	
 	now := time.Now().Unix() * 1000
-	for _, t := range tools {
+	for name := range tools {
 		status := "healthy"
 		healthyCount++
 		mcps = append(mcps, McpHealth{
-			Name:        t,
+			Name:        name,
 			Status:      status,
 			LastCheck:   now,
 			LastSuccess: now,

@@ -13,11 +13,6 @@ type Message struct {
         Content string `json:"content"`
 }
 
-type Model struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 type Tool struct {
         Name        string          `json:"name"`
         Description string          `json:"description"`

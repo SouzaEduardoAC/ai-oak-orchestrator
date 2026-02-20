@@ -12,7 +12,7 @@ import (
 )
 
 type ToolProvider interface {
-	ListTools(ctx context.Context) []*mcp.Client
+	ListTools(ctx context.Context) map[string]*mcp.Client
 }
 
 type Orchestrator struct {
@@ -68,7 +68,7 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		stream, err := o.llm.GenerateStream(ctx, prompt, allTools)
 		o.mu.RUnlock()
 		if err != nil {
-			output <- domain.AgentEvent{Type: domain.EventError, Payload: json.RawMessage(""" + err.Error() + """)}
+			output <- domain.AgentEvent{Type: domain.EventError, Payload: json.RawMessage(`"` + err.Error() + `"`)}
 			return err
 		}
 
@@ -78,7 +78,7 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		for chunk := range stream {
 			if chunk.Text != "" {
 				fullResponse += chunk.Text
-				output <- domain.AgentEvent{Type: domain.EventToken, Payload: json.RawMessage(""" + chunk.Text + """)}
+				output <- domain.AgentEvent{Type: domain.EventToken, Payload: json.RawMessage(`"` + chunk.Text + `"`)}
 			}
 			if chunk.ToolCall != nil {
 				activeToolCall = chunk.ToolCall

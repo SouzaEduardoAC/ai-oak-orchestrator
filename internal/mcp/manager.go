@@ -146,12 +146,14 @@ func (tm *ToolManager) StopTool(ctx context.Context, name string) error {
 	return tm.dockerManager.RemoveContainer(ctx, containerID)
 }
 
-func (tm *ToolManager) ListTools(ctx context.Context) []*Client {
+func (tm *ToolManager) ListTools(ctx context.Context) map[string]*Client {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
-	var clients []*Client
-	for _, c := range tm.activeTools {
-		clients = append(clients, c)
+	
+	// Return a copy to avoid external modification during map iteration
+	clients := make(map[string]*Client)
+	for name, c := range tm.activeTools {
+		clients[name] = c
 	}
 	return clients
 }
