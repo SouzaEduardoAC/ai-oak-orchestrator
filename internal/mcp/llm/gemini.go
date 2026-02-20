@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/google/generative-ai-go/genai"
@@ -108,20 +109,14 @@ func (p *GeminiProvider) ListModels(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Filter for models that support content generation
-		if m.SupportedGenerationMethods != nil {
-			for _, method := range m.SupportedGenerationMethods {
-				if method == "generateContent" {
-					// The name returned is usually "models/gemini-1.5-pro", we strip "models/"
-					name := m.Name
-					if len(name) > 7 && name[:7] == "models/" {
-						name = name[7:]
-					}
-					models = append(models, name)
-					break
-				}
-			}
+
+		// Include all models, but format the names consistently
+		name := m.Name
+		// Common prefixes in Google AI: "models/", "tunedModels/", "experimental/"
+		if i := strings.Index(name, "/"); i != -1 {
+			name = name[i+1:]
 		}
+		models = append(models, name)
 	}
 	return models, nil
 }
