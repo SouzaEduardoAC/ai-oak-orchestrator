@@ -54,6 +54,8 @@ All containers spawned by the orchestrator follow the deterministic naming patte
 
 ## Environment Variables
 - `SERVER_PORT`: Default `8080`.
-- `LLM_API_KEY`: Required for Gemini/OpenAI.
+- `LLM_PROVIDER`: The LLM provider to use (`gemini`, `openai`, `claude`).
+- `LLM_MODEL`: The model name to use.
+- `LLM_API_KEY`: Required for OpenAI/Claude. For **Gemini**, it is optional; if omitted, the system will fall back to **Application Default Credentials (ADC)**.
 - `REDIS_URL`: Location of the Redis instance.
 - `KEYCLOAK_JWKS_URL`: URL to fetch public keys for JWT validation.

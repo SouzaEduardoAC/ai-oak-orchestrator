@@ -24,8 +24,8 @@ A high-performance orchestration engine for LLMs and Model Context Protocol (MCP
 2. Create a `.env` file in the root:
    ```env
    LLM_PROVIDER=gemini
-   LLM_API_KEY=your_key_here
    LLM_MODEL=gemini-1.5-pro
+   # LLM_API_KEY= (Optional for Gemini if using ADC)
    REDIS_URL=redis://localhost:6379
    KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/master/protocol/openid-connect/certs
    ```
