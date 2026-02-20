@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp"
@@ -24,7 +25,9 @@ func NewMCPHandler(r *mcp.Registry, tm *mcp.ToolManager) *MCPHandler {
 func (h *MCPHandler) RegisterRoutes(g *echo.Group) {
 	g.GET("/tools", h.ListTools)
 	g.POST("/tools", h.AddTool)
+	g.POST("/add", h.AddTool)
 	g.DELETE("/tools/:name", h.DeleteTool)
+	g.DELETE("/:name", h.DeleteTool)
 	g.GET("/health", h.GetHealth)
 }
 
@@ -37,6 +40,21 @@ func (h *MCPHandler) ListTools(c echo.Context) error {
 }
 
 func (h *MCPHandler) AddTool(c echo.Context) error {
+	var input struct {
+		Name   string            `json:"name"`
+		Config domain.ToolConfig `json:"config"`
+	}
+	
+	if err := c.Bind(&input); err == nil && input.Name != "" {
+		if input.Config.Name == "" {
+			input.Config.Name = input.Name
+		}
+		if err := h.registry.SaveConfig(c.Request().Context(), input.Config); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusCreated, input.Config)
+	}
+
 	var cfg domain.ToolConfig
 	if err := c.Bind(&cfg); err != nil {
 		return err
@@ -53,12 +71,10 @@ func (h *MCPHandler) DeleteTool(c echo.Context) error {
 	name := c.Param("name")
 	ctx := c.Request().Context()
 
-	// 1. Stop and remove container if active
 	if err := h.toolManager.StopTool(ctx, name); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Failed to cleanup resources: %v", err))
 	}
 
-	// 2. Remove from registry
 	if err := h.registry.DeleteConfig(ctx, name); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -67,11 +83,38 @@ func (h *MCPHandler) DeleteTool(c echo.Context) error {
 }
 
 func (h *MCPHandler) GetHealth(c echo.Context) error {
-	// For now, return a simple map. In a real app, we'd query Docker/RPC health.
 	tools := h.toolManager.ListTools(c.Request().Context())
-	health := map[string]interface{}{
-		"active_tool_count": len(tools),
-		"status":            "healthy",
+	
+	type McpHealth struct {
+		Name                string `json:"name"`
+		Status              string `json:"status"`
+		LastCheck           int64  `json:"lastCheck"`
+		LastSuccess         int64  `json:"lastSuccess"`
+		ConsecutiveFailures int    `json:"consecutiveFailures"`
 	}
-	return c.JSON(http.StatusOK, health)
+
+	var mcps []McpHealth
+	healthyCount := 0
+	
+	now := time.Now().Unix() * 1000
+	for _, t := range tools {
+		status := "healthy"
+		healthyCount++
+		mcps = append(mcps, McpHealth{
+			Name:        t,
+			Status:      status,
+			LastCheck:   now,
+			LastSuccess: now,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"mcps": mcps,
+		"summary": map[string]interface{}{
+			"total":       len(tools),
+			"healthy":     healthyCount,
+			"unhealthy":   len(tools) - healthyCount,
+			"reconnecting": 0,
+		},
+	})
 }

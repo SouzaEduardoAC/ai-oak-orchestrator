@@ -31,5 +31,7 @@ func (h *LLMHandler) ListModels(c echo.Context) error {
 		models = append(models, domain.Model{ID: id, Name: id})
 	}
 
-	return c.JSON(http.StatusOK, models)
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"models": models,
+	})
 }

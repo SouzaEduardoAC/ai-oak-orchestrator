@@ -34,7 +34,9 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 	o.logger.Info("Agent loop started", zap.String("session_id", session.ID))
 
 	for {
-		// 0. Check for pending commands (e.g. SetModel)
+		// Signal thinking start
+		output <- domain.AgentEvent{Type: domain.EventThinking}
+
 		select {
 		case cmd := <-input:
 			if cmd.Type == domain.CommandSetModel {
@@ -49,7 +51,6 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		default:
 		}
 
-		// 1. Get current tools from all clients
 		var allTools []domain.Tool
 		for _, client := range o.toolManager.ListTools(ctx) {
 			tools, err := client.ListTools(ctx)
@@ -58,17 +59,16 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 			}
 		}
 
-		// 2. Format prompt
 		prompt := ""
 		for _, m := range session.Messages {
 			prompt += m.Role + ": " + m.Content + "\n"
 		}
 
-		// 3. Generate stream
 		o.mu.RLock()
 		stream, err := o.llm.GenerateStream(ctx, prompt, allTools)
 		o.mu.RUnlock()
 		if err != nil {
+			output <- domain.AgentEvent{Type: domain.EventError, Payload: json.RawMessage(""" + err.Error() + """)}
 			return err
 		}
 
@@ -78,21 +78,18 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		for chunk := range stream {
 			if chunk.Text != "" {
 				fullResponse += chunk.Text
-				output <- domain.AgentEvent{Type: domain.EventToken, Payload: json.RawMessage(`"` + chunk.Text + `"`)}
+				output <- domain.AgentEvent{Type: domain.EventToken, Payload: json.RawMessage(""" + chunk.Text + """)}
 			}
 			if chunk.ToolCall != nil {
 				activeToolCall = chunk.ToolCall
 			}
 		}
 
-		// 4. Check for tool calls
 		if activeToolCall == nil {
-			// No more tool calls, we are done
 			session.Messages = append(session.Messages, domain.Message{Role: "assistant", Content: fullResponse})
 			break
 		}
 
-		// 5. Tool Approval Wait
 		o.logger.Info("Tool approval requested", zap.String("name", activeToolCall.Name))
 		approvalPayload, _ := json.Marshal(activeToolCall)
 		output <- domain.AgentEvent{Type: domain.EventApprovalRequest, Payload: approvalPayload}
@@ -109,7 +106,7 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 				case domain.CommandReject:
 					rejected = true
 					o.logger.Info("Tool rejected by user", zap.String("name", activeToolCall.Name))
-					session.Messages = append(session.Messages, domain.Message{Role: "user", Content: "Tool execution rejected by user."})
+					session.Messages = append(session.Messages, domain.Message{Role: "user", Content: "Tool execution rejected by user." })
 				case domain.CommandSetModel:
 					var modelName string
 					if err := json.Unmarshal(cmd.Payload, &modelName); err == nil {
@@ -126,15 +123,16 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 			continue
 		}
 
-		// 6. Execute Tool
 		o.logger.Info("Executing tool", zap.String("name", activeToolCall.Name))
 		result, err := o.executeTool(ctx, activeToolCall, output)
 		if err != nil {
 			result = &domain.ToolResult{IsError: true, Content: err.Error()}
 		}
 
-		// 7. Append Result and Loop
+		// Send tool output to frontend
 		resJSON, _ := json.Marshal(result)
+		output <- domain.AgentEvent{Type: domain.EventToolOutput, Payload: resJSON}
+
 		session.Messages = append(session.Messages, domain.Message{Role: "assistant", Content: "Call tool " + activeToolCall.Name})
 		session.Messages = append(session.Messages, domain.Message{Role: "user", Content: "Tool result: " + string(resJSON)})
 	}
@@ -143,12 +141,10 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 }
 
 func (o *Orchestrator) executeTool(ctx context.Context, call *domain.ToolCall, output chan<- domain.AgentEvent) (*domain.ToolResult, error) {
-	// For now, iterate all clients until we find the tool
 	for _, client := range o.toolManager.ListTools(ctx) {
 		tools, _ := client.ListTools(ctx)
 		for _, t := range tools {
 			if t.Name == call.Name {
-				// Register temporary notification handler
 				client.OnNotification(func(method string, params json.RawMessage) {
 					o.logger.Info("Tool notification", zap.String("method", method))
 					output <- domain.AgentEvent{

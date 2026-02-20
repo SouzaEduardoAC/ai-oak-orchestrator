@@ -32,9 +32,11 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 | GET | `/health` | Service health status | No |
 | GET | `/api/mcp/tools` | List configured MCP tools | Yes |
 | POST | `/api/mcp/tools` | Register a new MCP tool | Yes |
+| POST | `/api/mcp/add` | Alias for registering a new MCP tool | Yes |
 | DELETE | `/api/mcp/tools/:name` | Remove an MCP tool and stop its container | Yes |
-| GET | `/api/mcp/health` | Get aggregate health of tool ecosystem | Yes |
-| GET | `/api/models/available` | List available models for active provider | Yes |
+| DELETE | `/api/mcp/:name` | Alias for removing an MCP tool | Yes |
+| GET | `/api/mcp/health` | Get aggregate health and list of MCP tool statuses | Yes |
+| GET | `/api/models/available` | List available models (returns `{"models": [...]}`) | Yes |
 
 #### WebSocket API (`/ws`)
 **Incoming Messages:**
@@ -43,8 +45,10 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 - `{"type": "set_model", "payload": "model-name"}`
 
 **Outgoing Events:**
+- `{"type": "agent:thinking", "payload": null}`
 - `{"type": "agent:response", "payload": "Partial word"}`
 - `{"type": "tool:approval_required", "payload": {...tool details...}}`
+- `{"type": "tool:output", "payload": {...tool result...}}`
 - `{"type": "agent:log", "payload": "Tool progress or log"}`
 - `{"type": "agent:error", "payload": "Error message"}`
 

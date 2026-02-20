@@ -23,12 +23,13 @@
     - Orchestrator retrieves active tools from the Registry.
     - Orchestrator initializes/connects to required MCP Docker containers (reusing existing ones if available).
 - **The Thinking Loop:**
-    1. **Prompting:** Full history (loaded from Redis) + new message + tools sent to LLM.
-    2. **Streaming:** Tokens streamed to UI as `agent:response` in real-time.
-    3. **Tool Detection:** LLM requests a tool call.
-    4. **Approval Request:** Backend pauses and sends `tool:approval_required` to the User.
-    5. **User Decision:** User clicks "Approve" or "Reject" in UI, sending an `approval` command.
-    6. **Execution:** If approved, Backend executes tool in Docker and feeds result back to LLM.
+    1. **Signal:** Backend sends `agent:thinking` to notify the UI.
+    2. **Prompting:** Full history (loaded from Redis) + new message + tools sent to LLM.
+    3. **Streaming:** Tokens streamed to UI as `agent:response` in real-time.
+    4. **Tool Detection:** LLM requests a tool call.
+    5. **Approval Request:** Backend pauses and sends `tool:approval_required` to the User.
+    6. **User Decision:** User clicks "Approve" or "Reject" in UI, sending an `approval` command.
+    7. **Execution:** If approved, Backend executes tool in Docker and sends result to UI via `tool:output` before feeding it back to the LLM.
 - **Conclusion:** LLM provides a final answer. The updated history is persisted back to Redis.
 
 ## 5. Resource Cleanup
