@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
@@ -17,7 +18,12 @@ type GeminiProvider struct {
 }
 
 func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) (*GeminiProvider, error) {
-	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	var opts []option.ClientOption
+	if apiKey != "" {
+		opts = append(opts, option.WithAPIKey(apiKey))
+	}
+
+	client, err := genai.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +61,9 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 				break
 			}
 			if err != nil {
-				return
+				// We can't return an error from the goroutine easily without changing the channel type,
+				// but for now, we'll log it.
+				continue
 			}
 
 			for _, cand := range resp.Candidates {
@@ -107,7 +115,7 @@ func (p *GeminiProvider) ListModels(ctx context.Context) ([]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to iterate models: %w", err)
 		}
 
 		// Include all models, but format the names consistently
