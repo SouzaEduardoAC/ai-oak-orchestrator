@@ -34,7 +34,11 @@ func NewGeminiProvider(ctx context.Context, apiKey string, modelName string) (*G
 }
 
 func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
-	model := p.client.GenerativeModel(p.model)
+	modelName := p.model
+	if !strings.HasPrefix(modelName, "models/") && !strings.HasPrefix(modelName, "tunedModels/") {
+		modelName = "models/" + modelName
+	}
+	model := p.client.GenerativeModel(modelName)
 	
 	if len(tools) > 0 {
 		genaiTools := &genai.Tool{
@@ -61,9 +65,11 @@ func (p *GeminiProvider) GenerateStream(ctx context.Context, prompt string, tool
 				break
 			}
 			if err != nil {
-				// We can't return an error from the goroutine easily without changing the channel type,
-				// but for now, we'll log it.
-				continue
+				if err != iterator.Done {
+					fmt.Printf("DEBUG: Gemini Stream Error: %v\n", err)
+					out <- domain.Chunk{Error: err}
+				}
+				break
 			}
 
 			for _, cand := range resp.Candidates {
@@ -118,6 +124,8 @@ func (p *GeminiProvider) ListModels(ctx context.Context) ([]string, error) {
 			return nil, fmt.Errorf("failed to iterate models: %w", err)
 		}
 
+		fmt.Printf("DEBUG: Available Gemini Model: %s\n", m.Name)
+		
 		// Include all models, but format the names consistently
 		name := m.Name
 		// Common prefixes in Google AI: "models/", "tunedModels/", "experimental/"

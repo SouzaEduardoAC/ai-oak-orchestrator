@@ -1,30 +1,25 @@
 # AI Context: AI Oak Orchestrator
 
 ## Machine-Readable Summary
-- **Project Name**: AI Oak Orchestrator
-- **Architecture**: Go (Echo) / Vue 3 (Pinia) / Docker / Valkey
-- **Role**: High-performance LLM-to-Tool middleware via Model Context Protocol (MCP).
-- **Core Engine**: Recursive Orchestrator loop with real-time HITL approval gate.
-- **Analysis Date**: 2026-02-27 (Sync Mode: Full Synthesis)
-- **Last Synced Hash**: AUTO-GEN-2026
+- **Sync Date**: 2026-02-27
+- **Architecture**: Monorepo (Go/Echo/Vite/Vue3/Nginx)
+- **Primary Transport**: WebSocket (RESP2 for Valkey, JSON-RPC for MCP)
+- **Auth Strategy**: Flexible (Keycloak OIDC or ADC/API Key for LLM)
+- **Network Pattern**: Nginx Proxy (UI) -> Internal Docker Service (Backend)
 
-## Dependency Map
+## Dependency Map & Roles
 ### Backend (Go)
-- `github.com/labstack/echo/v4`: Core HTTP/Routing engine.
-- `github.com/docker/docker/client`: Direct Docker Engine SDK for tool isolation.
-- `github.com/valkey-io/valkey-go`: High-performance session/config storage.
-- `go.uber.org/zap`: Structured, high-performance logging throughout the system.
-- `internal/agent`: Orchestrator logic and recursive LLM/Tool reasoning loop.
-- `internal/mcp`: Implementation of MCP (Model Context Protocol) client and tool registry.
+- `github.com/redis/go-redis/v9`: Valkey/Redis client (v9 chosen for explicit AUTH robustness).
+- `github.com/labstack/echo/v4`: High-performance HTTP/WebSocket routing.
+- `github.com/google/generative-ai-go/genai`: Google AI SDK for Gemini reasoning.
+- `github.com/docker/docker/client`: Orchestrates MCP tool container lifecycle.
 
 ### Frontend (Vue 3 / TypeScript)
-- `vue`: Core UI framework (Composition API).
-- `pinia`: State management for Chat, Auth, and MCP tool health.
-- `vite`: Build tool and development server.
-- `tailwindcss`: Utility-first CSS for "Oak" and "MCP" themes.
-- `axios`: RESTful API interaction with the backend.
+- `pinia`: Reactive global state for chat history and HITL queues.
+- `tailwindcss`: Styled for "Oak" (earthy) and "MCP" (tech) themes.
+- `useWebSocket.ts`: Custom composable handling relative-path WS proxying.
 
-## Knowledge Constraints
-- **HITL Enforcement**: All tool calls *must* pass through the `EventApprovalRequest` flow before execution.
-- **MCP Version**: Supports JSON-RPC 2.0 over Stdio transport.
-- **Session ID**: Required for every WebSocket connection to map history in Valkey.
+## Critical Constraints
+- **Model Prefixing**: Gemini models *must* have `models/` or `tunedModels/` prefix before use in `GenerateStream`.
+- **JSON Marshaling**: All WebSocket payloads must be explicitly marshaled via `json.Marshal` to ensure special characters don't break string boundaries.
+- **Port Mapping**: Host port 3000 -> Backend 8080; Host port 5173 -> Nginx 80.

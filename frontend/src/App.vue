@@ -37,15 +37,23 @@ onMounted(async () => {
     connect();
     
     unsubscribe = onMessage((msg) => {
+      console.log('Received WebSocket event:', msg.type, msg.payload);
       switch (msg.type) {
         case 'agent:thinking':
           chatStore.setThinking();
           break;
         case 'agent:response':
           chatStore.removeThinking();
+          let responseContent = msg.payload;
+          try {
+            if (typeof responseContent === 'string' && responseContent.startsWith('"')) {
+              responseContent = JSON.parse(responseContent);
+            }
+          } catch (e) {}
+          
           chatStore.addMessage({
             role: 'agent',
-            content: msg.payload,
+            content: responseContent,
             timestamp: Date.now()
           });
           break;
@@ -68,9 +76,16 @@ onMounted(async () => {
           break;
         case 'agent:error':
           chatStore.removeThinking();
+          let errorContent = msg.payload;
+          try {
+            if (typeof errorContent === 'string' && errorContent.startsWith('"')) {
+              errorContent = JSON.parse(errorContent);
+            }
+          } catch (e) {}
+          
           chatStore.addMessage({
             role: 'agent',
-            content: `❌ Error: ${msg.payload}`,
+            content: `❌ Error: ${errorContent}`,
             timestamp: Date.now()
           });
           break;
@@ -139,10 +154,15 @@ const toggleTheme = () => {
           <span class="text-xs font-black uppercase tracking-tighter text-brand-primary">{{ themeStore.currentTheme }}</span>
         </button>
 
-        <div v-if="chatStore.availableModels.length > 0" class="hidden md:flex items-center space-x-3 bg-brand-secondary/20 px-3 py-1.5 rounded-lg border border-gray-800">
+        <div v-if="chatStore.availableModels.length > 0" class="hidden md:flex items-center space-x-3 bg-brand-secondary/20 px-3 py-1.5 rounded-lg border border-gray-800 focus-within:border-brand-primary/50 transition-colors">
           <span class="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Model</span>
-          <select v-model="chatStore.selectedModel" class="bg-transparent text-xs font-bold text-brand-primary focus:outline-none cursor-pointer">
-            <option v-for="m in chatStore.availableModels" :key="m.id" :value="m.id">{{ m.name }}</option>
+          <select 
+            v-model="chatStore.selectedModel" 
+            class="model-select bg-transparent text-xs font-bold text-brand-primary focus:outline-none cursor-pointer pr-6"
+          >
+            <option v-for="m in chatStore.availableModels" :key="m.id" :value="m.id">
+              {{ m.name }}
+            </option>
           </select>
         </div>
 

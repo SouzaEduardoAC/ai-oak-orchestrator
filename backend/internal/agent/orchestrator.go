@@ -68,21 +68,34 @@ func (o *Orchestrator) Run(ctx context.Context, session *domain.Session, output 
 		stream, err := o.llm.GenerateStream(ctx, prompt, allTools)
 		o.mu.RUnlock()
 		if err != nil {
-			output <- domain.AgentEvent{Type: domain.EventError, Payload: json.RawMessage(`"` + err.Error() + `"`)}
+			errPayload, _ := json.Marshal(err.Error())
+			output <- domain.AgentEvent{Type: domain.EventError, Payload: errPayload}
 			return err
 		}
 
 		fullResponse := ""
 		var activeToolCall *domain.ToolCall
+		var streamErr error
 
 		for chunk := range stream {
+			if chunk.Error != nil {
+				streamErr = chunk.Error
+				break
+			}
 			if chunk.Text != "" {
 				fullResponse += chunk.Text
-				output <- domain.AgentEvent{Type: domain.EventToken, Payload: json.RawMessage(`"` + chunk.Text + `"`)}
+				tokenPayload, _ := json.Marshal(chunk.Text)
+				output <- domain.AgentEvent{Type: domain.EventToken, Payload: tokenPayload}
 			}
 			if chunk.ToolCall != nil {
 				activeToolCall = chunk.ToolCall
 			}
+		}
+
+		if streamErr != nil {
+			errPayload, _ := json.Marshal(streamErr.Error())
+			output <- domain.AgentEvent{Type: domain.EventError, Payload: errPayload}
+			return streamErr
 		}
 
 		if activeToolCall == nil {

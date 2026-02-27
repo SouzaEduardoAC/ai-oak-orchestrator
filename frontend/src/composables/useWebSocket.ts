@@ -25,7 +25,12 @@ export function useWebSocket() {
     }
 
     const authStore = useAuthStore();
-    let url = config.wsUrl || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+    let url = config.wsUrl;
+    
+    if (!url) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      url = `${protocol}//${window.location.host}/ws`;
+    }
     
     if (config.enableAuth && authStore.token) {
       url += (url.includes('?') ? '&' : '?') + `token=${authStore.token}`;

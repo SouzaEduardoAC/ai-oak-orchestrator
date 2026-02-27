@@ -85,10 +85,13 @@ type WSMessage struct {
 }
 
 func (h *Hub) HandleWebSocket(c echo.Context) error {
+	h.logger.Info("HandleWebSocket called, upgrading connection")
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
+		h.logger.Error("WebSocket upgrade failed", zap.Error(err))
 		return err
 	}
+	h.logger.Info("WebSocket upgraded successfully")
 	h.register <- ws
 
 	defer func() {
@@ -103,8 +106,11 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 
 		var wsMsg WSMessage
 		if err := json.Unmarshal(msg, &wsMsg); err != nil {
+			h.logger.Error("Failed to unmarshal websocket message", zap.Error(err), zap.String("raw", string(msg)))
 			continue
 		}
+
+		h.logger.Info("Received websocket message", zap.String("type", wsMsg.Type))
 
 		switch wsMsg.Type {
 		case "message":

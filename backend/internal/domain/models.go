@@ -34,6 +34,7 @@ type ToolResult struct {
 type Chunk struct {
         Text     string    `json:"text,omitempty"`
         ToolCall *ToolCall `json:"toolCall,omitempty"`
+        Error    error     `json:"-"`
 }
 
 type AgentEventType string
