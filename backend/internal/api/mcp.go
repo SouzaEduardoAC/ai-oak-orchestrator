@@ -3,12 +3,15 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp"
 	"github.com/labstack/echo/v4"
 )
+
+var validToolName = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 type MCPHandler struct {
 	registry    *mcp.Registry
@@ -46,6 +49,9 @@ func (h *MCPHandler) AddTool(c echo.Context) error {
 	}
 	
 	if err := c.Bind(&input); err == nil && input.Name != "" {
+		if !validToolName.MatchString(input.Name) {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid tool name: must contain only lowercase letters, numbers, and hyphens")
+		}
 		if input.Config.Name == "" {
 			input.Config.Name = input.Name
 		}
@@ -58,6 +64,10 @@ func (h *MCPHandler) AddTool(c echo.Context) error {
 	var cfg domain.ToolConfig
 	if err := c.Bind(&cfg); err != nil {
 		return err
+	}
+
+	if !validToolName.MatchString(cfg.Name) {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid tool name: must contain only lowercase letters, numbers, and hyphens")
 	}
 
 	if err := h.registry.SaveConfig(c.Request().Context(), cfg); err != nil {

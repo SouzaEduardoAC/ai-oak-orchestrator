@@ -8,6 +8,8 @@ import (
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/valkey"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -98,6 +100,13 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 		h.unregister <- ws
 	}()
 
+	sessionID := uuid.New().String()
+	if user, ok := c.Get("user").(jwt.MapClaims); ok {
+		if sub, ok := user["sub"].(string); ok {
+			sessionID = sub
+		}
+	}
+
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
@@ -114,7 +123,7 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 
 		switch wsMsg.Type {
 		case "message":
-			go h.runAgent(ws, wsMsg.Payload)
+			go h.runAgent(ws, wsMsg.Payload, sessionID)
 		case "approval":
 			var approval struct {
 				CallID   string `json:"callId"`
@@ -149,7 +158,7 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 	return nil
 }
 
-func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage) {
+func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage, sessionID string) {
 	ctx := context.Background()
 	output := make(chan domain.AgentEvent)
 	input := make(chan domain.AgentCommand, 1)
@@ -157,8 +166,6 @@ func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage) {
 	h.mu.Lock()
 	h.pendingCommands[conn] = input
 	h.mu.Unlock()
-
-	sessionID := "default-session"
 
 	session, err := h.valkey.GetSession(ctx, sessionID)
 	if err != nil {
