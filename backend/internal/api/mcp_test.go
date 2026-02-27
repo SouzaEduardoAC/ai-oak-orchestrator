@@ -83,6 +83,52 @@ func TestAddTool(t *testing.T) {
 	}
 }
 
+func TestAddTool_Validation(t *testing.T) {
+	e := echo.New()
+	mv := &mockValkey{data: make(map[string]string)}
+	reg := mcp.NewRegistry(mv)
+	h := NewMCPHandler(reg, nil)
+
+	tests := []struct {
+		name         string
+		toolName     string
+		expectedCode int
+	}{
+		{"Valid name", "weather-api-1", http.StatusCreated},
+		{"Invalid spaces", "weather api", http.StatusBadRequest},
+		{"Invalid caps", "WeatherAPI", http.StatusBadRequest},
+		{"Invalid special chars", "weather@api", http.StatusBadRequest},
+		{"Invalid path traversal", "../weather", http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := domain.ToolConfig{
+				Name:  tt.toolName,
+				Image: "mcp/weather",
+			}
+			body, _ := json.Marshal(tool)
+			req := httptest.NewRequest(http.MethodPost, "/api/mcp/tools", bytes.NewReader(body))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := h.AddTool(c)
+			
+			// Echo HTTP errors are returned directly, not wrapped in rec.Code yet
+			if he, ok := err.(*echo.HTTPError); ok {
+				if he.Code != tt.expectedCode {
+					t.Errorf("Expected status %d, got %d", tt.expectedCode, he.Code)
+				}
+			} else if tt.expectedCode != http.StatusCreated {
+				t.Errorf("Expected error but got success for %s", tt.toolName)
+			} else if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestListTools(t *testing.T) {
 	e := echo.New()
 	mv := &mockValkey{data: make(map[string]string)}
