@@ -1,7 +1,7 @@
 # AI Context: AI Oak Orchestrator (Go Backend)
 
 ## Project Overview
-AI Oak Orchestrator is a high-performance Golang backend designed to bridge Large Language Models (LLMs) with local/remote tools via the **Model Context Protocol (MCP)**. It acts as the "brain" of the ecosystem, managing conversation state, tool execution lifecycle in Docker containers, and real-time streaming to frontends.
+AI Oak Orchestrator is a high-performance Golang backend designed to bridge Large Language Models (LLMs) with local/remote tools via the **Model Context Protocol (MCP)**. It acts as the "brain" of the ecosystem, managing conversation state, tool execution lifecycle in Docker containers, and real-time streaming to frontends. This is the **backend component** of the larger AI Oak Orchestrator monorepo.
 
 ## Core Architecture
 - **Language:** Go 1.22+

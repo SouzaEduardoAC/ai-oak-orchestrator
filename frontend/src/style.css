@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme Definitions */
+:root, [data-theme='oak'] {
+  /* High-contrast Earthy/Nature Theme */
+  --brand-dark: 10 12 8;           /* #0a0c08 - Dark Forest Black */
+  --brand-primary: 134 239 172;    /* #86efac - Sage Green (Light) */
+  --brand-secondary: 30 41 59;     /* #1e293b - Slate (keeping it neutral for UI) */
+  --brand-accent: 251 191 36;      /* #fbbf24 - Amber 400 */
+  --brand-status-green: 74 222 128; /* #4ade80 - Green 400 */
+  --brand-status-red: 248 113 113;   /* #f87171 - Red 400 */
+}
+
+[data-theme='mcp'] {
+  /* Original Tech/Blue Theme */
+  --brand-dark: 15 23 42;          /* #0f172a - Dark Slate Blue */
+  --brand-primary: 96 165 250;     /* #60a5fa - Light Blue */
+  --brand-secondary: 30 41 59;     /* #1e293b - Slate */
+  --brand-accent: 250 204 21;      /* #facc15 - Amber/Yellow */
+  --brand-status-green: 74 222 128;
+  --brand-status-red: 248 113 113;
+}
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: rgb(var(--brand-dark));
+}
+
+#app {
+  width: 100%;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(var(--brand-secondary));
+  border-radius: 10px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--brand-primary));
+}
+
+/* Animations */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}

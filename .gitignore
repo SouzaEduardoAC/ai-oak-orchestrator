@@ -1,7 +1,36 @@
-bin/
+# Node.js
+node_modules/
 dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Go
+bin/
 vendor/
+
+# Environment Variables
 .env
-.idea/
+.env.*.local
+.env.local
+
+# IDEs
 .vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tsbuildinfo
 *.log

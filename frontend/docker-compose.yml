@@ -1,0 +1,13 @@
+services:
+  web-interface:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-web-interface
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_ENABLE_AUTH=${VITE_ENABLE_AUTH:-false}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3000/api}
+      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:3000/ws}
+    restart: unless-stopped

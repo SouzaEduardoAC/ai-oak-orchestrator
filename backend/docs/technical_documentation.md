@@ -57,6 +57,7 @@ The backend is a decoupled Go service designed for horizontal scalability (at th
 All containers spawned by the orchestrator follow the deterministic naming pattern: `ai-oak-mcp-[toolname]`. This allows the server to adopt existing containers upon restart or shared tool usage.
 
 ## Environment Variables
+The `.env` file is typically managed at the root of the monorepo.
 - `SERVER_PORT`: Default `8080`.
 - `LLM_PROVIDER`: The LLM provider to use (`gemini`, `openai`, `claude`).
 - `LLM_MODEL`: The model name to use.

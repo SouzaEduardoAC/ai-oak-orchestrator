@@ -8,17 +8,22 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Go
-bin/
-vendor/
-
 # Environment Variables
 .env
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env.local
 
-# Git
-.git
+# IDEs
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # OS Files
 .DS_Store
@@ -26,4 +31,3 @@ Thumbs.db
 
 # Build artifacts
 *.tsbuildinfo
-*.log
