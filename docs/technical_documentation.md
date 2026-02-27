@@ -61,5 +61,5 @@ All containers spawned by the orchestrator follow the deterministic naming patte
 - `LLM_PROVIDER`: The LLM provider to use (`gemini`, `openai`, `claude`).
 - `LLM_MODEL`: The model name to use.
 - `LLM_API_KEY`: Required for OpenAI/Claude. For **Gemini**, it is optional; if omitted, the system will fall back to **Application Default Credentials (ADC)**.
-- `VALKEY_URL`: Location of the Valkey instance (uses `redis://` scheme).
+- `VALKEY_URL`: Location of the Valkey instance (uses `valkey://` scheme).
 - `KEYCLOAK_JWKS_URL`: URL to fetch public keys for JWT validation.

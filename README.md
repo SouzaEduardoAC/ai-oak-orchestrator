@@ -26,7 +26,7 @@ A high-performance orchestration engine for LLMs and Model Context Protocol (MCP
    LLM_PROVIDER=google
    LLM_MODEL=gemini-2.0-flash-exp
    LLM_API_KEY=your_key
-   VALKEY_URL=redis://localhost:6379
+   VALKEY_URL=valkey://localhost:6379
    KEYCLOAK_JWKS_URL=http://localhost:8081/realms/master/protocol/openid-connect/certs
    ```
 3. Install dependencies:

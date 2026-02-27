@@ -40,7 +40,7 @@ type ValkeyConfig struct {
 func Load() (*Config, error) {
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("docker.host", "unix:///var/run/docker.sock")
-	viper.SetDefault("valkey.url", "redis://localhost:6379")
+	viper.SetDefault("valkey.url", "valkey://localhost:6379")
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
