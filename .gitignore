@@ -34,3 +34,6 @@ Thumbs.db
 # Build artifacts
 *.tsbuildinfo
 *.log
+
+# Local Compose
+local-compose-env.yml

@@ -35,7 +35,8 @@ type KeycloakConfig struct {
 }
 
 type ValkeyConfig struct {
-	URL string `mapstructure:"url"`
+	URL      string `mapstructure:"url"`
+	Password string `mapstructure:"password"`
 }
 
 func Load() (*Config, error) {
@@ -61,6 +62,7 @@ func Load() (*Config, error) {
 	}
 
 	mapEnv("valkey.url", "VALKEY_URL")
+	mapEnv("valkey.password", "VALKEY_PASSWORD")
 	mapEnv("server.port", "SERVER_PORT")
 	mapEnv("llm.provider", "LLM_PROVIDER")
 	mapEnv("llm.api_key", "LLM_API_KEY")

@@ -14,6 +14,19 @@ A high-performance orchestration platform that bridges Large Language Models (LL
 docker compose up
 ```
 
+## Local Development
+To run the orchestrator and web interface while using existing external dependencies (Valkey, Keycloak, etc.):
+1. Create a `.env` file from `.env.example`.
+2. Run using the dedicated local compose file:
+   ```bash
+   docker compose -f local-compose-env.yml up
+   ```
+
+### LLM Authentication
+The **Gemini/Google AI** provider is designed for flexibility:
+- **API Key**: Set `LLM_API_KEY` in your `.env` for standard key-based authentication.
+- **Application Default Credentials (ADC)**: Leave `LLM_API_KEY` empty to use your existing environment authentication (e.g., from the Gemini CLI or `gcloud`).
+
 ## Documentation
 For deep dives, see the full documentation suite:
 - [Business Flow](./docs/business_flow.md): High-level logic and Mermaid diagrams.

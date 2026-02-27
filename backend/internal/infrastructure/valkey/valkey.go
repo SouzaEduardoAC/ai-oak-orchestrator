@@ -3,28 +3,47 @@ package valkey
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
-	"github.com/valkey-io/valkey-go"
+	"github.com/redis/go-redis/v9"
 )
 
 type Client struct {
-	client valkey.Client
+	client *redis.Client
 }
 
-func NewClient(url string) (*Client, error) {
-	opts, err := valkey.ParseURL(url)
+func NewClient(rawURL string, password string) (*Client, error) {
+	// Standardize password: trim whitespace and any accidental quotes
+	password = strings.TrimSpace(password)
+	password = strings.Trim(password, "'\"")
+
+	// We parse the URL to get the host/port correctly, but we'll manually
+	// set the password to avoid any encoding/parsing issues.
+	opts, err := redis.ParseURL(rawURL)
 	if err != nil {
-		return nil, err
+		// Fallback for cases where the URL might be just a host:port
+		opts = &redis.Options{
+			Addr: rawURL,
+		}
 	}
 
-	client, err := valkey.NewClient(opts)
-	if err != nil {
-		return nil, err
+	// Always use the explicit password if provided
+	if password != "" {
+		opts.Password = password
 	}
+	
+	// Force RESP2 for compatibility with older Valkey/Redis handshakes
+	opts.Protocol = 2
 
-	if err := client.Do(context.Background(), client.B().Ping().Build()).Error(); err != nil {
+	client := redis.NewClient(opts)
+
+	// Verify connection with a short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 
@@ -46,26 +65,19 @@ func (c *Client) Set(ctx context.Context, key string, value interface{}, expirat
 		val = string(data)
 	}
 
-	b := c.client.B().Set().Key(key).Value(val)
-	var cmd valkey.Completed
-	if expiration > 0 {
-		cmd = b.Ex(expiration).Build()
-	} else {
-		cmd = b.Build()
-	}
-	return c.client.Do(ctx, cmd).Error()
+	return c.client.Set(ctx, key, val, expiration).Err()
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
-	return c.client.Do(ctx, c.client.B().Get().Key(key).Build()).ToString()
+	return c.client.Get(ctx, key).Result()
 }
 
 func (c *Client) Del(ctx context.Context, key string) error {
-	return c.client.Do(ctx, c.client.B().Del().Key(key).Build()).Error()
+	return c.client.Del(ctx, key).Err()
 }
 
 func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
-	return c.client.Do(ctx, c.client.B().Keys().Pattern(pattern).Build()).AsStrSlice()
+	return c.client.Keys(ctx, pattern).Result()
 }
 
 func (c *Client) SaveSession(ctx context.Context, session *domain.Session) error {

@@ -19,7 +19,13 @@
 | **WebSocket Disconnect** | Frontend exponential backoff reconnection logic. | `useWebSocket.ts` |
 | **LLM Rate Limit** | Echo middleware and application-level retry-on-error. | `internal/agent/orchestrator.go` |
 
-## 4. Complexity & Performance
+## 4. LLM Authentication & Provider Logic
+The system supports multiple authentication vectors for the Gemini/Google AI provider:
+- **API Key Authentication**: Controlled via the `LLM_API_KEY` environment variable. If provided, the system uses `option.WithAPIKey`.
+- **Application Default Credentials (ADC)**: If `LLM_API_KEY` is omitted or empty, the Go backend automatically falls back to ADC. This allows the orchestrator to inherit authentication from the host environment (e.g., via `gcloud auth application-default login` or an active Gemini CLI session).
+- **Service Account**: In production environments, ADC will automatically pick up the attached Service Account credentials without manual configuration.
+
+## 5. Complexity & Performance
 - **Agent Reasoning**: The loop is recursive and `O(N)` where N is the number of thinking steps required by the LLM. It is I/O-bound.
 - **Tool Discovery**: `ListTools` iterates through the active tool map, maintaining efficient access via hash maps.
 - **Docker I/O**: Bidirectional streams for Stdio use non-blocking reads and goroutines to prevent main-thread blockage during high-volume tool output.

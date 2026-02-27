@@ -35,10 +35,9 @@ func main() {
 	defer l.Sync()
 
 	l.Info("Starting AI Oak Orchestrator", zap.String("port", cfg.Server.Port))
-	l.Info("Loaded Valkey configuration", zap.String("url", cfg.Valkey.URL))
 
 	// 3. Initialize Infrastructure
-	vdb, err := valkey.NewClient(cfg.Valkey.URL)
+	vdb, err := valkey.NewClient(cfg.Valkey.URL, cfg.Valkey.Password)
 	if err != nil {
 		l.Fatal("Failed to connect to Valkey", zap.Error(err))
 	}
