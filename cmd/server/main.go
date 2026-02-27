@@ -35,6 +35,7 @@ func main() {
 	defer l.Sync()
 
 	l.Info("Starting AI Oak Orchestrator", zap.String("port", cfg.Server.Port))
+	l.Info("Loaded Valkey configuration", zap.String("url", cfg.Valkey.URL))
 
 	// 3. Initialize Infrastructure
 	vdb, err := valkey.NewClient(cfg.Valkey.URL)
@@ -68,7 +69,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// 6. Security Middleware
-	auth := internalMiddleware.Auth(cfg.Keycloak.JWKSURL)
+	auth := internalMiddleware.Auth(cfg.Keycloak.Enabled, cfg.Keycloak.JWKSURL)
 
 	// 7. Register Handlers
 	apiGroup := e.Group("/api")

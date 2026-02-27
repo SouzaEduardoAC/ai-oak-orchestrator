@@ -11,11 +11,23 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func Auth(jwksURL string) echo.MiddlewareFunc {
+func Auth(enabled bool, jwksURL string) echo.MiddlewareFunc {
+	if !enabled {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c echo.Context) error {
+				// Inject mock user claims when auth is disabled
+				claims := jwt.MapClaims{"sub": "guest-user", "name": "Guest"}
+				c.Set("user", claims)
+				ctx := context.WithValue(c.Request().Context(), "user", claims)
+				c.SetRequest(c.Request().WithContext(ctx))
+				return next(c)
+			}
+		}
+	}
+
 	// Initialize keyfunc
 	k, err := keyfunc.NewDefault([]string{jwksURL})
 	if err != nil {
-		// In a real app, you might want to handle this differently
 		panic(fmt.Sprintf("Failed to create keyfunc: %v", err))
 	}
 
