@@ -11,7 +11,7 @@ The AI Oak Orchestrator Go backend has achieved full functional parity with the 
 - **Unified Flow:** Whether using Gemini, OpenAI, or Claude, the Agent Orchestrator now follows the same "Think -> Call Tool -> Approve -> Observe" loop.
 
 ### Persistent Registry & Infrastructure
-- **Redis Implementation:** Completed the `GetConfigs` method in the Registry service. It now uses Redis key scanning (`mcp:config:*`) to retrieve all saved tool configurations.
+- **Valkey Implementation:** Completed the `GetConfigs` method in the Registry service. It now uses Valkey key scanning (`mcp:config:*`) to retrieve all saved tool configurations.
 - **Docker Integration:** The `ContainerManager` is now fully integrated, allowing for dynamic spawning and attachment to tool-providing containers.
 - **Keycloak Security:** All API and WebSocket routes (except `/health`) are secured via the JWT/JWKS middleware.
 
@@ -25,7 +25,7 @@ The AI Oak Orchestrator Go backend has achieved full functional parity with the 
 | :--- | :--- | :--- |
 | OpenAI Stream | **Done** | Uses `bufio.Scanner` with fragment accumulation. |
 | Claude Stream | **Done** | Handles `content_block_start` and `content_block_delta` events. |
-| Redis Keys | **Done** | Exposed `Keys` method in `infrastructure/redis`. |
+| Valkey Keys | **Done** | Exposed `Keys` method in `infrastructure/valkey`. |
 | Main Wiring | **Done** | Unified all services in `cmd/server/main.go`. |
 
 ## 4. Verification Results
@@ -37,6 +37,6 @@ The AI Oak Orchestrator Go backend has achieved full functional parity with the 
 The system is ready for deployment via the updated `feat/migration-go-backend` branch. Ensure the following environment variables are set:
 - `LLM_PROVIDER`
 - `LLM_API_KEY`
-- `REDIS_URL`
+- `VALKEY_URL`
 - `KEYCLOAK_JWKS_URL`
 - `DOCKER_HOST` (e.g., `unix:///var/run/docker.sock`)

@@ -9,19 +9,19 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
-      - REDIS_URL=redis://redis:6379
+      - VALKEY_URL=redis://valkey:6379
       - KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/master/protocol/openid-connect/certs
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - redis
+      - valkey
       - keycloak
     networks:
       - oak-network
 
-  redis:
-    image: redis:alpine
+  valkey:
+    image: valkey/valkey:latest
     networks:
       - oak-network
 

@@ -1,4 +1,4 @@
-package redis
+package valkey
 
 import (
 	"context"
@@ -6,41 +6,66 @@ import (
 	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
-	"github.com/redis/go-redis/v9"
+	"github.com/valkey-io/valkey-go"
 )
 
 type Client struct {
-	rdb *redis.Client
+	client valkey.Client
 }
 
 func NewClient(url string) (*Client, error) {
-	opts, err := redis.ParseURL(url)
+	opts, err := valkey.ParseURL(url)
 	if err != nil {
 		return nil, err
 	}
 
-	rdb := redis.NewClient(opts)
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
+	client, err := valkey.NewClient(opts)
+	if err != nil {
 		return nil, err
 	}
 
-	return &Client{rdb: rdb}, nil
+	if err := client.Do(context.Background(), client.B().Ping().Build()).Error(); err != nil {
+		return nil, err
+	}
+
+	return &Client{client: client}, nil
 }
 
 func (c *Client) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
-	return c.rdb.Set(ctx, key, value, expiration).Err()
+	var val string
+	switch v := value.(type) {
+	case string:
+		val = v
+	case []byte:
+		val = string(v)
+	default:
+		data, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		val = string(data)
+	}
+
+	b := c.client.B().Set().Key(key).Value(val)
+	var cmd valkey.Completed
+	if expiration > 0 {
+		cmd = b.Ex(expiration).Build()
+	} else {
+		cmd = b.Build()
+	}
+	return c.client.Do(ctx, cmd).Error()
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
-	return c.rdb.Get(ctx, key).Result()
+	return c.client.Do(ctx, c.client.B().Get().Key(key).Build()).ToString()
 }
 
 func (c *Client) Del(ctx context.Context, key string) error {
-	return c.rdb.Del(ctx, key).Err()
+	return c.client.Do(ctx, c.client.B().Del().Key(key).Build()).Error()
 }
 
 func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
-	return c.rdb.Keys(ctx, pattern).Result()
+	return c.client.Do(ctx, c.client.B().Keys().Pattern(pattern).Build()).AsStrSlice()
 }
 
 func (c *Client) SaveSession(ctx context.Context, session *domain.Session) error {

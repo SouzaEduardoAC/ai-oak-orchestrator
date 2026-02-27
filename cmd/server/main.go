@@ -10,7 +10,7 @@ import (
 	"github.com/ecoza/ai-oak-orchestrator/internal/api/websocket"
 	"github.com/ecoza/ai-oak-orchestrator/internal/config"
 	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/docker"
-	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/redis"
+	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/valkey"
 	"github.com/ecoza/ai-oak-orchestrator/internal/logger"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp/llm"
@@ -37,9 +37,9 @@ func main() {
 	l.Info("Starting AI Oak Orchestrator", zap.String("port", cfg.Server.Port))
 
 	// 3. Initialize Infrastructure
-	rdb, err := redis.NewClient(cfg.Redis.URL)
+	vdb, err := valkey.NewClient(cfg.Valkey.URL)
 	if err != nil {
-		l.Fatal("Failed to connect to Redis", zap.Error(err))
+		l.Fatal("Failed to connect to Valkey", zap.Error(err))
 	}
 
 	dockerManager, err := docker.NewManager(cfg.Docker.Host)
@@ -47,7 +47,7 @@ func main() {
 		l.Fatal("Failed to initialize Docker manager", zap.Error(err))
 	}
 
-	registry := mcp.NewRegistry(rdb)
+	registry := mcp.NewRegistry(vdb)
 	toolManager := mcp.NewToolManager(dockerManager, registry, l)
 	go toolManager.InitializeAll(context.Background())
 
@@ -80,7 +80,7 @@ func main() {
 	llmHandler := api.NewLLMHandler(provider)
 	llmHandler.RegisterRoutes(apiGroup.Group("/models"))
 
-	hub := websocket.NewHub(l, orch, rdb)
+	hub := websocket.NewHub(l, orch, vdb)
 	go hub.Run()
 
 	e.GET("/ws", hub.HandleWebSocket, auth)

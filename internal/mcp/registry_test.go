@@ -9,11 +9,11 @@ import (
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 )
 
-type mockRedis struct {
+type mockValkey struct {
 	data map[string]string
 }
 
-func (m *mockRedis) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+func (m *mockValkey) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	switch v := value.(type) {
 	case []byte:
 		m.data[key] = string(v)
@@ -26,7 +26,7 @@ func (m *mockRedis) Set(ctx context.Context, key string, value interface{}, expi
 	return nil
 }
 
-func (m *mockRedis) Get(ctx context.Context, key string) (string, error) {
+func (m *mockValkey) Get(ctx context.Context, key string) (string, error) {
 	val, ok := m.data[key]
 	if !ok {
 		return "", nil
@@ -34,7 +34,7 @@ func (m *mockRedis) Get(ctx context.Context, key string) (string, error) {
 	return val, nil
 }
 
-func (m *mockRedis) Keys(ctx context.Context, pattern string) ([]string, error) {
+func (m *mockValkey) Keys(ctx context.Context, pattern string) ([]string, error) {
 	var keys []string
 	for k := range m.data {
 		keys = append(keys, k)
@@ -42,14 +42,14 @@ func (m *mockRedis) Keys(ctx context.Context, pattern string) ([]string, error) 
 	return keys, nil
 }
 
-func (m *mockRedis) Del(ctx context.Context, key string) error {
+func (m *mockValkey) Del(ctx context.Context, key string) error {
 	delete(m.data, key)
 	return nil
 }
 
 func TestRegistry_SaveAndGet(t *testing.T) {
-	mr := &mockRedis{data: make(map[string]string)}
-	reg := NewRegistry(mr)
+	mv := &mockValkey{data: make(map[string]string)}
+	reg := NewRegistry(mv)
 
 	cfg := domain.ToolConfig{
 		Name:   "test-tool",

@@ -11,7 +11,7 @@ type Config struct {
 	LLM      LLMConfig      `mapstructure:"llm"`
 	Docker   DockerConfig   `mapstructure:"docker"`
 	Keycloak KeycloakConfig `mapstructure:"keycloak"`
-	Redis    RedisConfig    `mapstructure:"redis"`
+	Valkey   ValkeyConfig   `mapstructure:"valkey"`
 }
 
 type ServerConfig struct {
@@ -33,14 +33,14 @@ type KeycloakConfig struct {
 	JWKSURL string `mapstructure:"jwks_url"`
 }
 
-type RedisConfig struct {
+type ValkeyConfig struct {
 	URL string `mapstructure:"url"`
 }
 
 func Load() (*Config, error) {
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("docker.host", "unix:///var/run/docker.sock")
-	viper.SetDefault("redis.url", "redis://localhost:6379")
+	viper.SetDefault("valkey.url", "redis://localhost:6379")
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
