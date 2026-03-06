@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/docker"
 	"github.com/ecoza/ai-oak-orchestrator/internal/mcp/transport"
 	"go.uber.org/zap"
@@ -51,25 +53,43 @@ func (tm *ToolManager) EnsureTool(ctx context.Context, name string) (*Client, er
 		return nil, err
 	}
 
-	var targetConfig *string
-	for _, cfg := range configs {
+	var toolCfg *domain.ToolConfig
+	for i, cfg := range configs {
 		if cfg.Name == name {
-			targetConfig = &cfg.Image
+			toolCfg = &configs[i]
 			break
 		}
 	}
 
-	if targetConfig == nil {
+	if toolCfg == nil {
 		return nil, fmt.Errorf("tool %s not found in registry", name)
 	}
 
-	// 2. Start/Get Container (Singleton Logic)
+	// 2. SSE transport path
+	if toolCfg.Transport == "sse" || toolCfg.Transport == "http" {
+		sseTransport := transport.NewSSE(toolCfg.URL, toolCfg.Headers, tm.logger)
+		mcpClient := NewClient(sseTransport)
+
+		readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := sseTransport.WaitReady(readyCtx); err != nil {
+			return nil, fmt.Errorf("SSE transport did not become ready: %w", err)
+		}
+
+		if err := mcpClient.Initialize(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize SSE MCP: %w", err)
+		}
+
+		tm.activeTools[name] = mcpClient
+		return mcpClient, nil
+	}
+
+	// 3. Docker/stdio path
 	containerName := fmt.Sprintf("ai-oak-mcp-%s", name)
 	var containerID string
 
 	inspect, err := tm.dockerManager.InspectContainer(ctx, containerName)
 	if err == nil {
-		// Container exists
 		containerID = inspect.ID
 		if !inspect.State.Running {
 			if err := tm.dockerManager.StartContainer(ctx, containerID); err != nil {
@@ -77,9 +97,7 @@ func (tm *ToolManager) EnsureTool(ctx context.Context, name string) (*Client, er
 			}
 		}
 	} else {
-		// Container does not exist, create it
-		// First pull if not present (simplified for MVP)
-		id, err := tm.dockerManager.CreateContainer(ctx, *targetConfig, nil, containerName)
+		id, err := tm.dockerManager.CreateContainer(ctx, toolCfg.Image, nil, containerName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create container: %w", err)
 		}
@@ -89,7 +107,6 @@ func (tm *ToolManager) EnsureTool(ctx context.Context, name string) (*Client, er
 		}
 	}
 
-	// 3. Attach and Initialize MCP
 	hijacked, err := tm.dockerManager.Attach(ctx, containerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to attach to container: %w", err)
@@ -105,7 +122,7 @@ func (tm *ToolManager) EnsureTool(ctx context.Context, name string) (*Client, er
 
 	tm.activeTools[name] = mcpClient
 	tm.activeContainers[name] = containerID
-	
+
 	return mcpClient, nil
 }
 

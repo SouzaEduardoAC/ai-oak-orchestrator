@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -55,9 +56,16 @@ func (h *MCPHandler) AddTool(c echo.Context) error {
 		if input.Config.Name == "" {
 			input.Config.Name = input.Name
 		}
+		input.Config.Active = true
 		if err := h.registry.SaveConfig(c.Request().Context(), input.Config); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+		go func(name string) {
+			if _, err := h.toolManager.EnsureTool(context.Background(), name); err != nil {
+				// logged inside EnsureTool
+				_ = err
+			}
+		}(input.Config.Name)
 		return c.JSON(http.StatusCreated, input.Config)
 	}
 
@@ -70,9 +78,16 @@ func (h *MCPHandler) AddTool(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid tool name: must contain only lowercase letters, numbers, and hyphens")
 	}
 
+	cfg.Active = true
 	if err := h.registry.SaveConfig(c.Request().Context(), cfg); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	go func(name string) {
+		if _, err := h.toolManager.EnsureTool(context.Background(), name); err != nil {
+			_ = err
+		}
+	}(cfg.Name)
 
 	return c.JSON(http.StatusCreated, cfg)
 }

@@ -47,6 +47,14 @@ export const useChatStore = defineStore('chat', {
     addMessage(message: Message) {
       this.messages.push(message);
     },
+    appendAgentToken(token: string) {
+      const last = this.messages[this.messages.length - 1];
+      if (last && last.role === 'agent') {
+        last.content += token;
+      } else {
+        this.messages.push({ role: 'agent', content: token, timestamp: Date.now() });
+      }
+    },
     removeThinking() {
       this.messages = this.messages.filter(m => m.role !== 'thinking');
       this.isThinking = false;

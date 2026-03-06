@@ -22,6 +22,7 @@ type LLMConfig struct {
 	Provider string `mapstructure:"provider"`
 	APIKey   string `mapstructure:"api_key"`
 	Model    string `mapstructure:"model"`
+	BaseURL  string `mapstructure:"base_url"`
 }
 
 type DockerConfig struct {
@@ -67,6 +68,7 @@ func Load() (*Config, error) {
 	mapEnv("llm.provider", "LLM_PROVIDER")
 	mapEnv("llm.api_key", "LLM_API_KEY")
 	mapEnv("llm.model", "LLM_MODEL")
+	mapEnv("llm.base_url", "ANTHROPIC_BASE_URL")
 	mapEnv("keycloak.enabled", "KEYCLOAK_ENABLED")
 	mapEnv("keycloak.url", "KEYCLOAK_URL")
 	mapEnv("keycloak.jwks_url", "KEYCLOAK_JWKS_URL")

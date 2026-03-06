@@ -7,19 +7,25 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 )
 
 type ClaudeProvider struct {
-	apiKey string
-	model  string
+	apiKey  string
+	model   string
+	baseURL string
 }
 
-func NewClaudeProvider(apiKey, model string) *ClaudeProvider {
+func NewClaudeProvider(apiKey, model, baseURL string) *ClaudeProvider {
+	if baseURL == "" {
+		baseURL = "https://api.anthropic.com"
+	}
 	return &ClaudeProvider{
-		apiKey: apiKey,
-		model:  model,
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: baseURL,
 	}
 }
 
@@ -28,12 +34,33 @@ func (p *ClaudeProvider) SetModel(name string) {
 }
 
 func (p *ClaudeProvider) ListModels(ctx context.Context) ([]string, error) {
-	return []string{
-		"claude-3-5-sonnet-20240620",
-		"claude-3-opus-20240229",
-		"claude-3-sonnet-20240229",
-		"claude-3-haiku-20240307",
-	}, nil
+	req, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	models := make([]string, 0, len(result.Data))
+	for _, m := range result.Data {
+		models = append(models, m.ID)
+	}
+	return models, nil
 }
 
 type claudeRequest struct {
@@ -56,7 +83,7 @@ type claudeTool struct {
 }
 
 func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tools []domain.Tool) (<-chan domain.Chunk, error) {
-	out := make(chan domain.Chunk)
+	out := make(chan domain.Chunk, 4)
 
 	reqBody := claudeRequest{
 		Model: p.model,
@@ -82,26 +109,40 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
 	go func() {
-		defer resp.Body.Close()
 		defer close(out)
 
+		// Use a context with timeout so the HTTP call (including waiting for
+		// response headers from a slow/queued gateway) is bounded. Running
+		// client.Do inside the goroutine means the caller never blocks here.
+		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer cancel()
+
+		req, err := http.NewRequestWithContext(reqCtx, "POST", p.baseURL+"/v1/messages", bytes.NewBuffer(data))
+		if err != nil {
+			select {
+			case out <- domain.Chunk{Error: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", p.apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+
+		resp, err := (&http.Client{}).Do(req)
+		if err != nil {
+			select {
+			case out <- domain.Chunk{Error: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+		defer resp.Body.Close()
+
 		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 		var toolCallID string
 		var toolName string
 		var toolArgs strings.Builder
@@ -138,6 +179,7 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 				if event.ContentBlock.Type == "tool_use" {
 					toolCallID = event.ContentBlock.ID
 					toolName = event.ContentBlock.Name
+					toolArgs.Reset() // reset args for each new tool block
 				}
 			case "content_block_delta":
 				if event.Delta.Type == "text_delta" {
@@ -152,7 +194,16 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 			}
 		}
 
+		if err := scanner.Err(); err != nil {
+			out <- domain.Chunk{Error: err}
+			return
+		}
+
 		if toolName != "" {
+			args := toolArgs.String()
+			if args == "" {
+				args = "{}"
+			}
 			select {
 			case <-ctx.Done():
 				return
@@ -160,7 +211,7 @@ func (p *ClaudeProvider) GenerateStream(ctx context.Context, prompt string, tool
 				ToolCall: &domain.ToolCall{
 					ID:        toolCallID,
 					Name:      toolName,
-					Arguments: json.RawMessage(toolArgs.String()),
+					Arguments: json.RawMessage(args),
 				},
 			}:
 			}

@@ -14,7 +14,7 @@ func NewProvider(ctx context.Context, cfg config.LLMConfig) (Provider, error) {
 	case "openai":
 		return NewOpenAIProvider(cfg.APIKey, cfg.Model), nil
 	case "claude":
-		return NewClaudeProvider(cfg.APIKey, cfg.Model), nil
+		return NewClaudeProvider(cfg.APIKey, cfg.Model, cfg.BaseURL), nil
 	case "mock":
 		return NewMockProvider(), nil
 	default:

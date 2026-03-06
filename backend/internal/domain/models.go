@@ -67,8 +67,11 @@ type AgentCommand struct {
 }
 
 type ToolConfig struct {
-        Name   string            `json:"name"`
-        Image  string            `json:"image"`
-        Env    map[string]string `json:"env"`
-        Active bool              `json:"active"`
+        Name      string            `json:"name"`
+        Image     string            `json:"image"`
+        Env       map[string]string `json:"env"`
+        Active    bool              `json:"active"`
+        Transport string            `json:"transport"`           // "sse", "stdio", "stdio-docker"
+        URL       string            `json:"url"`                 // for SSE/HTTP transport
+        Headers   map[string]string `json:"headers,omitempty"`   // optional custom headers
 }

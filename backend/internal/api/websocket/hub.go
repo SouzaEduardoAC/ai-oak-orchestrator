@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/ecoza/ai-oak-orchestrator/internal/domain"
 	"github.com/ecoza/ai-oak-orchestrator/internal/infrastructure/valkey"
@@ -25,28 +26,56 @@ type AgentRunner interface {
 	Run(ctx context.Context, session *domain.Session, output chan<- domain.AgentEvent, input <-chan domain.AgentCommand) error
 }
 
+// sessionState holds everything needed to route events/commands for one active agent session.
+type sessionState struct {
+	input    chan domain.AgentCommand
+	mu       sync.Mutex          // serializes writes to the current conn
+	conn     *websocket.Conn     // current active WebSocket connection (may change on reconnect)
+}
+
+func (s *sessionState) write(msgType int, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conn == nil {
+		return nil // no active connection, drop the write
+	}
+	// Apply a write deadline so a stalled browser never blocks the agent.
+	s.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	err := s.conn.WriteMessage(msgType, data)
+	s.conn.SetWriteDeadline(time.Time{}) // clear deadline after write
+	return err
+}
+
+func (s *sessionState) setConn(c *websocket.Conn) {
+	s.mu.Lock()
+	s.conn = c
+	s.mu.Unlock()
+}
+
 type Hub struct {
-	clients         map[*websocket.Conn]bool
-	broadcast       chan []byte
-	register        chan *websocket.Conn
-	unregister      chan *websocket.Conn
-	pendingCommands map[*websocket.Conn]chan domain.AgentCommand
-	agent           AgentRunner
-	valkey          *valkey.Client
-	logger          *zap.Logger
-	mu              sync.Mutex
+	clients       map[*websocket.Conn]bool
+	broadcast     chan []byte
+	register      chan *websocket.Conn
+	unregister    chan *websocket.Conn
+	sessions      map[string]*sessionState // sessionID -> active agent state
+	connSession   map[*websocket.Conn]string // conn -> sessionID
+	agent         AgentRunner
+	valkey        *valkey.Client
+	logger        *zap.Logger
+	mu            sync.Mutex
 }
 
 func NewHub(logger *zap.Logger, agent AgentRunner, vdb *valkey.Client) *Hub {
 	return &Hub{
-		clients:         make(map[*websocket.Conn]bool),
-		broadcast:       make(chan []byte),
-		register:        make(chan *websocket.Conn),
-		unregister:      make(chan *websocket.Conn),
-		pendingCommands: make(map[*websocket.Conn]chan domain.AgentCommand),
-		agent:           agent,
-		valkey:          vdb,
-		logger:          logger,
+		clients:     make(map[*websocket.Conn]bool),
+		broadcast:   make(chan []byte),
+		register:    make(chan *websocket.Conn),
+		unregister:  make(chan *websocket.Conn),
+		sessions:    make(map[string]*sessionState),
+		connSession: make(map[*websocket.Conn]string),
+		agent:       agent,
+		valkey:      vdb,
+		logger:      logger,
 	}
 }
 
@@ -63,6 +92,17 @@ func (h *Hub) Run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				client.Close()
+			}
+			// Detach conn from session so writes are dropped until reconnect
+			if sid, ok := h.connSession[client]; ok {
+				if st, ok := h.sessions[sid]; ok {
+					st.mu.Lock()
+					if st.conn == client {
+						st.conn = nil
+					}
+					st.mu.Unlock()
+				}
+				delete(h.connSession, client)
 			}
 			h.mu.Unlock()
 			h.logger.Debug("Client unregistered")
@@ -100,12 +140,47 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 		h.unregister <- ws
 	}()
 
+	// Keepalive: ping every 30s, close if no pong within 70s.
+	ws.SetPongHandler(func(string) error {
+		ws.SetReadDeadline(time.Now().Add(70 * time.Second))
+		return nil
+	})
+	ws.SetReadDeadline(time.Now().Add(70 * time.Second))
+
+	stopPing := make(chan struct{})
+	defer close(stopPing)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				// WriteControl is safe to call concurrently with other write methods.
+				if err := ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+					return
+				}
+			case <-stopPing:
+				return
+			}
+		}
+	}()
+
 	sessionID := uuid.New().String()
 	if user, ok := c.Get("user").(jwt.MapClaims); ok {
 		if sub, ok := user["sub"].(string); ok {
 			sessionID = sub
 		}
 	}
+
+	// Attach this conn to the session. If an agent is already running for this
+	// session (e.g. reconnect after page refresh), re-use it.
+	h.mu.Lock()
+	h.connSession[ws] = sessionID
+	if st, ok := h.sessions[sessionID]; ok {
+		st.setConn(ws)
+		h.logger.Info("Reconnected to existing agent session", zap.String("session_id", sessionID))
+	}
+	h.mu.Unlock()
 
 	for {
 		_, msg, err := ws.ReadMessage()
@@ -123,7 +198,12 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 
 		switch wsMsg.Type {
 		case "message":
-			go h.runAgent(ws, wsMsg.Payload, sessionID)
+			h.mu.Lock()
+			_, hasRunning := h.sessions[sessionID]
+			h.mu.Unlock()
+			if !hasRunning {
+				go h.runAgent(ws, wsMsg.Payload, sessionID)
+			}
 		case "approval":
 			var approval struct {
 				CallID   string `json:"callId"`
@@ -135,8 +215,8 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 					cmdType = domain.CommandApprove
 				}
 				h.mu.Lock()
-				if ch, ok := h.pendingCommands[ws]; ok {
-					ch <- domain.AgentCommand{
+				if st, ok := h.sessions[sessionID]; ok {
+					st.input <- domain.AgentCommand{
 						Type:    cmdType,
 						Payload: wsMsg.Payload,
 					}
@@ -145,8 +225,8 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 			}
 		case string(domain.CommandSetModel):
 			h.mu.Lock()
-			if ch, ok := h.pendingCommands[ws]; ok {
-				ch <- domain.AgentCommand{
+			if st, ok := h.sessions[sessionID]; ok {
+				st.input <- domain.AgentCommand{
 					Type:    domain.AgentCommandType(wsMsg.Type),
 					Payload: wsMsg.Payload,
 				}
@@ -154,17 +234,19 @@ func (h *Hub) HandleWebSocket(c echo.Context) error {
 			h.mu.Unlock()
 		}
 	}
-	
+
 	return nil
 }
 
 func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage, sessionID string) {
 	ctx := context.Background()
-	output := make(chan domain.AgentEvent)
+	output := make(chan domain.AgentEvent, 64)
 	input := make(chan domain.AgentCommand, 1)
 
+	st := &sessionState{input: input, conn: conn}
+
 	h.mu.Lock()
-	h.pendingCommands[conn] = input
+	h.sessions[sessionID] = st
 	h.mu.Unlock()
 
 	session, err := h.valkey.GetSession(ctx, sessionID)
@@ -177,10 +259,10 @@ func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage, sessionID 
 
 	defer func() {
 		h.mu.Lock()
-		delete(h.pendingCommands, conn)
+		delete(h.sessions, sessionID)
 		h.mu.Unlock()
 		close(output)
-		
+
 		if err := h.valkey.SaveSession(ctx, session); err != nil {
 			h.logger.Error("Failed to save session", zap.Error(err))
 		}
@@ -189,7 +271,7 @@ func (h *Hub) runAgent(conn *websocket.Conn, payload json.RawMessage, sessionID 
 	go func() {
 		for event := range output {
 			resp, _ := json.Marshal(event)
-			conn.WriteMessage(websocket.TextMessage, resp)
+			st.write(websocket.TextMessage, resp)
 		}
 	}()
 

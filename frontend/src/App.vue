@@ -50,23 +50,26 @@ onMounted(async () => {
               responseContent = JSON.parse(responseContent);
             }
           } catch (e) {}
-          
-          chatStore.addMessage({
-            role: 'agent',
-            content: responseContent,
-            timestamp: Date.now()
-          });
+          chatStore.appendAgentToken(responseContent);
           break;
         case 'tool:approval_required':
           chatStore.removeThinking();
-          chatStore.addMessage({
-            role: 'approval',
-            data: msg.payload,
-            status: 'pending',
-            queuePosition: msg.payload.queuePosition || 1,
-            totalInQueue: msg.payload.totalInQueue || 1,
-            timestamp: Date.now()
-          });
+          if (msg.payload) {
+            chatStore.addMessage({
+              role: 'approval',
+              data: {
+                callId: msg.payload.id ?? '',
+                name: msg.payload.name ?? 'unknown',
+                args: msg.payload.arguments ?? {},
+              },
+              status: 'pending',
+              queuePosition: msg.payload.queuePosition || 1,
+              totalInQueue: msg.payload.totalInQueue || 1,
+              timestamp: Date.now()
+            });
+          } else {
+            console.error('tool:approval_required received with null payload', msg);
+          }
           break;
         case 'tool:output':
           const lastApproval = [...chatStore.messages].reverse().find(m => m.role === 'approval');
